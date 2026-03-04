@@ -4,12 +4,22 @@
  * can render a fully custom title bar.
  */
 
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow, shell, nativeImage } from 'electron';
 import { join } from 'path';
 
 export let mainWindow: BrowserWindow | null = null;
 
 const isDev = process.env.NODE_ENV === 'development';
+
+function loadAppIcon(): Electron.NativeImage | undefined {
+  for (const name of ['icon.ico', 'icon.png']) {
+    try {
+      const img = nativeImage.createFromPath(join(__dirname, '../../resources', name));
+      if (!img.isEmpty()) return img;
+    } catch { /* file missing */ }
+  }
+  return undefined;
+}
 
 export function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
@@ -17,6 +27,7 @@ export function createWindow(): BrowserWindow {
     height: 780,
     minWidth: 940,
     minHeight: 620,
+    icon: loadAppIcon(),
     // Frameless so we can render a custom title bar in the renderer.
     frame: false,
     // Use a solid dark background to avoid white flash on load.

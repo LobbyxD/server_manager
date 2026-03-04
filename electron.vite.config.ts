@@ -20,6 +20,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    publicDir: resolve('resources'),
     plugins: [react()],
     resolve: {
       alias: {

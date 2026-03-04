@@ -10,7 +10,7 @@
 
 import { app, dialog, ipcMain, BrowserWindow } from 'electron';
 import { createWindow, mainWindow } from './window';
-import { createTray } from './tray';
+import { createTray, destroyTray } from './tray';
 import {
   registerIpcHandlers,
   startAutoStartServers,
@@ -134,15 +134,20 @@ app.whenReady().then(() => {
   });
 });
 
-// Prevent the app from quitting when all windows are closed on Windows/Linux
-// so the tray icon keeps the app alive.
+// On Windows/Linux: only keep alive if minimizeToTray is enabled.
+// If tray is disabled, quit normally when the window is closed.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // Do nothing – the tray icon keeps the process alive.
+    const { minimizeToTray } = getSettings();
+    if (!minimizeToTray) {
+      app.quit();
+    }
+    // else: tray icon keeps the process alive
   }
 });
 
 app.on('before-quit', () => {
+  destroyTray();
   shutdownSteam();
   // Last-resort cleanup – force-kill anything still alive.
   stopAllServers();

@@ -59,21 +59,6 @@ const IconClose = () => (
   </svg>
 );
 
-/** Simplified Creeper face logo rendered as inline SVG. */
-const CreeperLogo = () => (
-  <svg width="22" height="22" viewBox="0 0 22 22" aria-label="Creeper logo">
-    {/* Head */}
-    <rect x="2" y="1" width="18" height="20" rx="2" fill="var(--accent)" />
-    {/* Eyes */}
-    <rect x="5"  y="6" width="4" height="4" rx="1" fill="var(--bg-primary)" />
-    <rect x="13" y="6" width="4" height="4" rx="1" fill="var(--bg-primary)" />
-    {/* Mouth */}
-    <rect x="9"  y="12" width="4" height="2" fill="var(--bg-primary)" />
-    <rect x="7"  y="14" width="8" height="2" fill="var(--bg-primary)" />
-    <rect x="9"  y="16" width="4" height="2" fill="var(--bg-primary)" />
-  </svg>
-);
-
 // ---------------------------------------------------------------------------
 // Window control button
 // ---------------------------------------------------------------------------
@@ -162,47 +147,51 @@ export const TitleBar: React.FC<TitleBarProps> = ({ serverName }) => {
         </button>
       </div>
 
-      {/* Center: Breadcrumb title */}
+      {/* Center: Icon + Breadcrumb title */}
       <div
         style={{
           flex: 1,
-          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
           fontSize: 13,
           fontWeight: 500,
           color: 'var(--text-secondary)',
           pointerEvents: 'none',
           overflow: 'hidden',
           whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
         }}
       >
-        {serverName ? (
-          <>
-            <span style={{ color: 'var(--text-muted)' }}>
-              Minecraft Server Manager
-            </span>
-            <span style={{ margin: '0 8px', color: 'var(--text-muted)' }}>
-              /
-            </span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-              {serverName}
-            </span>
-          </>
-        ) : (
-          'Minecraft Server Manager'
-        )}
+        <img
+          src="/icon.png"
+          alt="App icon"
+          width={18}
+          height={18}
+          style={{ borderRadius: 3, objectFit: 'contain', flexShrink: 0 }}
+          draggable={false}
+        />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {serverName ? (
+            <>
+              <span style={{ color: 'var(--text-muted)' }}>
+                Minecraft Server Manager
+              </span>
+              <span style={{ margin: '0 8px', color: 'var(--text-muted)' }}>
+                /
+              </span>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                {serverName}
+              </span>
+            </>
+          ) : (
+            'Minecraft Server Manager'
+          )}
+        </span>
       </div>
 
-      {/* Right: Logo + window controls */}
+      {/* Right: window controls */}
       <div className="no-drag" style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-        {/* App logo */}
-        <div style={{ padding: '0 10px', display: 'flex', alignItems: 'center', opacity: 0.9 }}>
-          <CreeperLogo />
-        </div>
-
-        {/* Divider */}
-        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} />
-
         <WinBtn onClick={() => window.api.minimizeWindow()} title="Minimize">
           <IconMinimize />
         </WinBtn>
