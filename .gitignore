@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+
+# Vite / electron-vite cache
+.vite/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor directories
+.idea/
+.vscode/
+
+# electron-builder temp
+__pycache__/
