@@ -13,6 +13,20 @@ export interface ServerProfile {
   batPath: string;
   /** Whether to automatically start this server when the app launches. */
   autoStart: boolean;
+  /** Whether to automatically create a world backup every time the server stops. */
+  autoBackup: boolean;
+  /** Optional path to user_jvm_args.txt for editing through the manager. */
+  jvmArgsPath?: string;
+}
+
+/** Metadata about a single world backup archive. */
+export interface BackupEntry {
+  filename: string;
+  fullPath: string;
+  /** ISO-8601 timestamp of when the backup was created. */
+  createdAt: string;
+  /** Size of the zip archive in bytes. */
+  sizeBytes: number;
 }
 
 /** Current lifecycle state of a server process. */
@@ -42,6 +56,10 @@ export interface AppSettings {
   maxConcurrentServers: number;
   /** When true, raw technical error messages are shown instead of friendly ones. */
   debugMode: boolean;
+  /** Maximum number of world backups to keep per server (oldest deleted when exceeded). */
+  backupLimit: number;
+  /** The ID of the last server the user had selected — restored on next launch. */
+  lastServerId?: string;
 }
 
 /**
@@ -82,8 +100,17 @@ export const IPC = {
   SETTINGS_SET: 'settings:set',
 
   DIALOG_OPEN_BAT: 'dialog:openBat',
+  DIALOG_OPEN_FILE: 'dialog:openFile',
   BAT_READ: 'bat:read',
   BAT_WRITE: 'bat:write',
+  SHELL_OPEN_FOLDER: 'shell:openFolder',
+  SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+
+  BACKUP_CREATE: 'backup:create',
+  BACKUP_LIST: 'backup:list',
+  BACKUP_RESTORE: 'backup:restore',
+  BACKUP_DELETE: 'backup:delete',
+  BACKUP_OPEN_FOLDER: 'backup:openFolder',
 
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',

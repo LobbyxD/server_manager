@@ -3,7 +3,7 @@
  * Mirrors the object exposed by src/preload/index.ts via contextBridge.
  */
 
-import { LogLine, ServerProfile, AppSettings } from '../../shared/types';
+import { LogLine, ServerProfile, AppSettings, BackupEntry } from '../../shared/types';
 
 declare global {
   interface Window {
@@ -29,6 +29,18 @@ declare global {
 
       // File dialog
       browseBatFile: () => Promise<string | null>;
+      browseFile: (title?: string) => Promise<string | null>;
+
+      // Shell operations
+      openFolder: (filePath: string) => Promise<{ success: boolean }>;
+      openExternal: (url: string) => Promise<{ success: boolean }>;
+
+      // World backups
+      listBackups: (id: string) => Promise<BackupEntry[]>;
+      createBackup: (id: string) => Promise<BackupEntry>;
+      restoreBackup: (id: string, backupFilePath: string) => Promise<{ success: boolean }>;
+      deleteBackup: (id: string, backupFilePath: string) => Promise<{ success: boolean }>;
+      openBackupFolder: (id: string) => Promise<{ success: boolean }>;
 
       // BAT file editor
       readBatFile: (filePath: string) => Promise<string>;

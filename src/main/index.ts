@@ -37,6 +37,8 @@ app.on('second-instance', () => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
+    // Flash the taskbar button so the user notices the window coming to front.
+    mainWindow.flashFrame(true);
   }
 });
 

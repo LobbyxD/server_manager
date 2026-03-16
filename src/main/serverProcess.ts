@@ -18,6 +18,7 @@ export class ServerProcess extends EventEmitter {
   private serverId: string;
   private logCounter = 0;
   private stopTimer: NodeJS.Timeout | null = null;
+  private shutdownTimer: NodeJS.Timeout | null = null;
 
   constructor(serverId: string) {
     super();
@@ -68,6 +69,10 @@ export class ServerProcess extends EventEmitter {
           if (line.includes('Done (') && line.includes('! For help, type "help"')) {
             this.emit('ready');
           }
+          // Detect in-game /stop or server self-shutdown
+          if (line.includes('Stopping server')) {
+            this.handleServerShutdown();
+          }
         }
       }
     });
@@ -91,6 +96,10 @@ export class ServerProcess extends EventEmitter {
       if (this.stopTimer) {
         clearTimeout(this.stopTimer);
         this.stopTimer = null;
+      }
+      if (this.shutdownTimer) {
+        clearTimeout(this.shutdownTimer);
+        this.shutdownTimer = null;
       }
       this.proc = null;
       this.emit('stopped', code);
@@ -154,6 +163,10 @@ export class ServerProcess extends EventEmitter {
       clearTimeout(this.stopTimer);
       this.stopTimer = null;
     }
+    if (this.shutdownTimer) {
+      clearTimeout(this.shutdownTimer);
+      this.shutdownTimer = null;
+    }
     if (this.proc) {
       const pid = this.proc.pid;
       const proc = this.proc;
@@ -164,6 +177,29 @@ export class ServerProcess extends EventEmitter {
         proc.kill('SIGKILL');
       }
     }
+  }
+
+  /**
+   * Called when "Stopping server" is detected in stdout.
+   * Closes stdin so that any 'pause' in the batch file gets an EOF and unblocks,
+   * then starts a 5-second safety timer to force-kill the process tree if it
+   * still has not exited (e.g. the batch file does more cleanup after java exits).
+   */
+  private handleServerShutdown(): void {
+    // End stdin → sends EOF, unblocks `pause` in batch files.
+    try { this.proc?.stdin?.end(); } catch { /* ignore */ }
+
+    if (this.shutdownTimer) return; // already scheduled
+    this.shutdownTimer = setTimeout(() => {
+      this.shutdownTimer = null;
+      if (!this.isRunning) return;
+      const pid = this.proc?.pid;
+      if (pid && process.platform === 'win32') {
+        spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], { windowsHide: true });
+      } else {
+        this.proc?.kill('SIGTERM');
+      }
+    }, 5_000);
   }
 
   private createLogLine(text: string, type: LogLine['type']): LogLine {

@@ -4,10 +4,10 @@
  * Button states are disabled/enabled based on the server's live status.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { ServerStatus } from '../../../../shared/types';
-import { BatEditor } from '../BatEditor';
+import { ServerSettingsModal } from '../ServerSettingsModal';
 
 /**
  * Maps a thrown IPC error to a display message.
@@ -54,11 +54,11 @@ const IconForceKill = () => (
   </svg>
 );
 
-const IconEdit = () => (
+const IconSettings = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
@@ -71,48 +71,6 @@ const IconRestart = () => (
 );
 
 // ---------------------------------------------------------------------------
-// Auto-start Toggle
-// ---------------------------------------------------------------------------
-
-interface AutoStartToggleProps {
-  enabled: boolean;
-  onChange: (val: boolean) => void;
-}
-
-const AutoStartToggle: React.FC<AutoStartToggleProps> = ({ enabled, onChange }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      padding: '4px 10px',
-      background: 'var(--bg-elevated)',
-      borderRadius: 'var(--radius-sm)',
-      border: '1px solid var(--border)',
-      cursor: 'pointer',
-    }}
-    onClick={() => onChange(!enabled)}
-    title="Toggle auto-start on app launch"
-  >
-    <div className={`toggle-track ${enabled ? 'on' : ''}`}>
-      <div className="toggle-thumb" />
-    </div>
-    <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-      Auto-start
-    </span>
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        color: enabled ? 'var(--accent)' : 'var(--text-muted)',
-      }}
-    >
-      {enabled ? 'ON' : 'OFF'}
-    </span>
-  </div>
-);
-
-// ---------------------------------------------------------------------------
 // ServerControls
 // ---------------------------------------------------------------------------
 
@@ -120,14 +78,16 @@ export const ServerControls: React.FC = () => {
   const activeServerId  = useAppStore((s) => s.activeServerId);
   const serverStatuses  = useAppStore((s) => s.serverStatuses);
   const servers         = useAppStore((s) => s.servers);
-  const updateServer    = useAppStore((s) => s.updateServer);
   const setServerStatus = useAppStore((s) => s.setServerStatus);
   const clearLogs       = useAppStore((s) => s.clearLogs);
   const debugMode       = useAppStore((s) => s.settings.debugMode ?? false);
 
-  const [loading, setLoading]             = useState<string | null>(null);
-  const [startError, setStartError]       = useState<string | null>(null);
-  const [batEditorOpen, setBatEditorOpen] = useState(false);
+  const [loading, setLoading]           = useState<string | null>(null);
+  const [startError, setStartError]     = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Tracks whether a "restart" is pending after server stops.
+  const pendingRestartRef = useRef(false);
 
   const server = servers.find((s) => s.id === activeServerId) ?? null;
   const status: ServerStatus = (activeServerId && serverStatuses[activeServerId]) ?? 'stopped';
@@ -140,6 +100,28 @@ export const ServerControls: React.FC = () => {
     setLoading(action);
     try { await fn(); } finally { setLoading(null); }
   };
+
+  // When activeServerId changes, cancel any pending restart for the old server.
+  useEffect(() => {
+    if (pendingRestartRef.current) {
+      pendingRestartRef.current = false;
+      setLoading(null);
+    }
+  }, [activeServerId]);
+
+  // After server stops: if a restart was pending, clear logs then start fresh.
+  useEffect(() => {
+    if (!pendingRestartRef.current || status !== 'stopped' || !activeServerId) return;
+    pendingRestartRef.current = false;
+    const sid = activeServerId;
+    clearLogs(sid);
+    setServerStatus(sid, 'starting');
+    setLoading(null);
+    window.api.startServer(sid).catch((e) => {
+      setServerStatus(sid, 'stopped');
+      setStartError(resolveError(e, debugMode));
+    });
+  }, [status, activeServerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStart = async () => {
     if (!activeServerId) return;
@@ -163,24 +145,23 @@ export const ServerControls: React.FC = () => {
       await window.api.stopServer(activeServerId!);
     });
 
-  const handleRestart = () =>
-    run('restart', async () => {
-      setServerStatus(activeServerId!, 'stopping');
-      await window.api.restartServer(activeServerId!);
+  const handleRestart = () => {
+    if (!activeServerId || !isRunning) return;
+    setStartError(null);
+    setLoading('restart');
+    setServerStatus(activeServerId, 'stopping');
+    pendingRestartRef.current = true;
+    window.api.stopServer(activeServerId).catch(() => {
+      pendingRestartRef.current = false;
+      setLoading(null);
     });
+  };
 
   const handleForceKill = () =>
     run('forceKill', async () => {
       setServerStatus(activeServerId!, 'stopping');
       await window.api.forceKillServer(activeServerId!);
     });
-
-  const handleAutoStartChange = async (val: boolean) => {
-    if (!server) return;
-    const updated = { ...server, autoStart: val };
-    await window.api.updateProfile(updated);
-    updateServer(updated);
-  };
 
   if (!server) return null;
 
@@ -239,18 +220,17 @@ export const ServerControls: React.FC = () => {
         )}
       </button>
 
-      {/* Force Kill */}
+      {/* Force Stop */}
       <button
         className="btn btn-danger"
         onClick={handleForceKill}
-        disabled={isBusy}
-        title="Immediately kill the server process tree (cmd.exe + java.exe). Use this if Stop is unresponsive or the process is an orphan from a previous session."
-        style={{ opacity: 0.85 }}
+        disabled={isBusy || status === 'stopped'}
+        title="Immediately terminate this server's process (cmd.exe + java.exe). Use this if Stop is unresponsive or the server is an orphan from a previous session."
       >
         {loading === 'forceKill' ? (
-          <span style={{ opacity: 0.7 }}>Killing...</span>
+          <span style={{ opacity: 0.7 }}>Stopping...</span>
         ) : (
-          <><IconForceKill /> Force Kill</>
+          <><IconForceKill /> Force Stop</>
         )}
       </button>
 
@@ -281,24 +261,18 @@ export const ServerControls: React.FC = () => {
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Edit .bat script */}
+      {/* Server Settings (tabbed modal for all config files) */}
       <button
         className="btn btn-surface"
-        onClick={() => setBatEditorOpen(true)}
-        title="Edit the server start script (.bat)"
+        onClick={() => setSettingsOpen(true)}
+        title="Edit server.properties, eula.txt, run script, and JVM args"
         style={{ gap: 5 }}
       >
-        <IconEdit /> Edit Script
+        <IconSettings /> Server Settings
       </button>
 
-      {/* Auto-start toggle */}
-      <AutoStartToggle
-        enabled={server.autoStart}
-        onChange={handleAutoStartChange}
-      />
-
-      {batEditorOpen && (
-        <BatEditor batPath={server.batPath} onClose={() => setBatEditorOpen(false)} />
+      {settingsOpen && (
+        <ServerSettingsModal server={server} onClose={() => setSettingsOpen(false)} />
       )}
 
       {/* Start error banner */}

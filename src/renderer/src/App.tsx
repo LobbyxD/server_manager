@@ -20,8 +20,9 @@ export const App: React.FC = () => {
   const servers        = useAppStore((s) => s.servers);
   const activeServerId = useAppStore((s) => s.activeServerId);
   const settings       = useAppStore((s) => s.settings);
-  const setServers     = useAppStore((s) => s.setServers);
-  const setSettings    = useAppStore((s) => s.setSettings);
+  const setServers      = useAppStore((s) => s.setServers);
+  const setSettings     = useAppStore((s) => s.setSettings);
+  const setActiveServer = useAppStore((s) => s.setActiveServer);
   const isSettingsOpen    = useAppStore((s) => s.isSettingsOpen);
   const isServerFormOpen  = useAppStore((s) => s.isServerFormOpen);
   const setServerStatus   = useAppStore((s) => s.setServerStatus);
@@ -59,6 +60,11 @@ export const App: React.FC = () => {
       // Hydrate server statuses (e.g. after auto-start on launch).
       for (const [id, status] of Object.entries(allStatuses)) {
         setServerStatus(id, status as import('../../../shared/types').ServerStatus);
+      }
+
+      // Restore the last selected server if it still exists.
+      if (appSettings.lastServerId && profiles.some((p) => p.id === appSettings.lastServerId)) {
+        setActiveServer(appSettings.lastServerId);
       }
     };
 

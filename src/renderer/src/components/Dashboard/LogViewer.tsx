@@ -138,6 +138,7 @@ LogRow.displayName = 'LogRow';
 export const LogViewer: React.FC = () => {
   const activeServerId  = useAppStore((s) => s.activeServerId);
   const serverLogs      = useAppStore((s) => s.serverLogs);
+  const logLineCount    = useAppStore((s) => s.logLineCount);
   const serverStatuses  = useAppStore((s) => s.serverStatuses);
   const clearLogs       = useAppStore((s) => s.clearLogs);
   const fontSize        = useAppStore((s) => s.settings.fontSize);
@@ -158,6 +159,7 @@ export const LogViewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const rawLines: LogLine[] = (activeServerId && serverLogs[activeServerId]) ?? [];
+  const totalLines: number  = (activeServerId && logLineCount[activeServerId]) ?? 0;
 
   const lines = useMemo(() => {
     if (!filter.trim()) return rawLines;
@@ -274,9 +276,13 @@ export const LogViewer: React.FC = () => {
 
         <div style={{ flex: 1 }} />
 
-        {/* Line count */}
+        {/* Line count — shows total received; notes when buffer is trimmed */}
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {lines.length.toLocaleString()} line{lines.length !== 1 ? 's' : ''}
+          {filter.trim()
+            ? `${lines.length.toLocaleString()} / ${rawLines.length.toLocaleString()} lines`
+            : totalLines > rawLines.length
+              ? `${rawLines.length.toLocaleString()} shown · ${totalLines.toLocaleString()} total`
+              : `${totalLines.toLocaleString()} line${totalLines !== 1 ? 's' : ''}`}
         </span>
 
         {/* Auto-scroll toggle */}

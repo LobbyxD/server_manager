@@ -50,17 +50,19 @@ export const ServerForm: React.FC = () => {
 
   const isEditing = editingServer !== null;
 
-  const [name, setName]         = useState('');
-  const [batPath, setBatPath]   = useState('');
+  const [name, setName]           = useState('');
+  const [batPath, setBatPath]     = useState('');
+  const [jvmArgsPath, setJvmArgsPath] = useState('');
   const [autoStart, setAutoStart] = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
 
   // Populate fields when editing an existing server.
   useEffect(() => {
     if (editingServer) {
       setName(editingServer.name);
       setBatPath(editingServer.batPath);
+      setJvmArgsPath(editingServer.jvmArgsPath ?? '');
       setAutoStart(editingServer.autoStart);
     }
   }, [editingServer]);
@@ -74,6 +76,11 @@ export const ServerForm: React.FC = () => {
       const parts = path.replace(/\\/g, '/').split('/');
       setName(parts[parts.length - 2] ?? parts[parts.length - 1] ?? '');
     }
+  };
+
+  const handleBrowseJvmArgs = async () => {
+    const path = await window.api.browseFile('Select user_jvm_args.txt');
+    if (path) setJvmArgsPath(path);
   };
 
   const handleSave = async () => {
@@ -93,6 +100,7 @@ export const ServerForm: React.FC = () => {
           name: trimmedName,
           batPath: trimmedPath,
           autoStart,
+          jvmArgsPath: jvmArgsPath.trim() || undefined,
         };
         const saved = await window.api.updateProfile(updated);
         updateServer(saved);
@@ -101,6 +109,8 @@ export const ServerForm: React.FC = () => {
           name: trimmedName,
           batPath: trimmedPath,
           autoStart,
+          autoBackup: false,
+          jvmArgsPath: jvmArgsPath.trim() || undefined,
         });
         addServer(saved);
       }
@@ -207,6 +217,41 @@ export const ServerForm: React.FC = () => {
               >
                 Browse
               </button>
+            </div>
+          </div>
+
+          {/* JVM Args path (optional) */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                marginBottom: 5,
+                fontWeight: 500,
+              }}
+            >
+              JVM Args File <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="field"
+                type="text"
+                placeholder="C:\Servers\MySMP\user_jvm_args.txt"
+                value={jvmArgsPath}
+                onChange={(e) => setJvmArgsPath(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn btn-surface"
+                onClick={handleBrowseJvmArgs}
+                style={{ flexShrink: 0 }}
+              >
+                Browse
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Set to enable editing user_jvm_args.txt through the manager.
             </div>
           </div>
 

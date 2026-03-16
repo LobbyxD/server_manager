@@ -260,7 +260,10 @@ export const Sidebar: React.FC = () => {
               server={server}
               isActive={server.id === activeServerId}
               status={serverStatuses[server.id]}
-              onSelect={() => setActiveServer(server.id)}
+              onSelect={() => {
+                setActiveServer(server.id);
+                window.api.setSettings({ lastServerId: server.id });
+              }}
               onEdit={() => setServerFormOpen(true, server)}
               onDelete={() => handleDelete(server.id, server.name)}
             />

@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC, LogLine, ServerProfile, AppSettings } from '../shared/types';
+import { IPC, LogLine, ServerProfile, AppSettings, BackupEntry } from '../shared/types';
 
 // ---------------------------------------------------------------------------
 // Type-safe wrapper functions
@@ -42,12 +42,32 @@ const api = {
   // --- File dialog --------------------------------------------------------
   browseBatFile: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC.DIALOG_OPEN_BAT),
+  browseFile: (title?: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE, title),
 
   // --- BAT file editor ----------------------------------------------------
   readBatFile: (filePath: string): Promise<string> =>
     ipcRenderer.invoke(IPC.BAT_READ, filePath),
   writeBatFile: (filePath: string, content: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC.BAT_WRITE, filePath, content),
+
+  // --- Shell operations ---------------------------------------------------
+  openFolder: (filePath: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.SHELL_OPEN_FOLDER, filePath),
+  openExternal: (url: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.SHELL_OPEN_EXTERNAL, url),
+
+  // --- World backups -------------------------------------------------------
+  listBackups: (id: string): Promise<BackupEntry[]> =>
+    ipcRenderer.invoke(IPC.BACKUP_LIST, id),
+  createBackup: (id: string): Promise<BackupEntry> =>
+    ipcRenderer.invoke(IPC.BACKUP_CREATE, id),
+  restoreBackup: (id: string, backupFilePath: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.BACKUP_RESTORE, id, backupFilePath),
+  deleteBackup: (id: string, backupFilePath: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.BACKUP_DELETE, id, backupFilePath),
+  openBackupFolder: (id: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.BACKUP_OPEN_FOLDER, id),
 
   // --- Window controls (fire-and-forget) ----------------------------------
   minimizeWindow: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),

@@ -258,6 +258,7 @@ export const Settings: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 0',
+            borderBottom: '1px solid var(--border)',
           }}
         >
           <div>
@@ -291,6 +292,52 @@ export const Settings: React.FC = () => {
               className="btn btn-surface"
               style={{ width: 28, height: 28, padding: 0, justifyContent: 'center' }}
               onClick={() => patch({ maxConcurrentServers: Math.min(10, (draft.maxConcurrentServers ?? 1) + 1) })}
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Backup limit */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 0',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+              Max backups per server
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              Oldest backup is deleted when this limit is exceeded. Default is 5.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              className="btn btn-surface"
+              style={{ width: 28, height: 28, padding: 0, justifyContent: 'center' }}
+              onClick={() => patch({ backupLimit: Math.max(1, (draft.backupLimit ?? 5) - 1) })}
+            >
+              -
+            </button>
+            <span
+              style={{
+                width: 28,
+                textAlign: 'center',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {draft.backupLimit ?? 5}
+            </span>
+            <button
+              className="btn btn-surface"
+              style={{ width: 28, height: 28, padding: 0, justifyContent: 'center' }}
+              onClick={() => patch({ backupLimit: Math.min(50, (draft.backupLimit ?? 5) + 1) })}
             >
               +
             </button>

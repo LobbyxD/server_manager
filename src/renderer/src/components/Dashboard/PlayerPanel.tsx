@@ -16,6 +16,24 @@ import { useAppStore } from '../../store/useAppStore';
 import { PlayerInput } from '../PlayerInput';
 
 // ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
+
+const IconChevronRight = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const IconChevronLeft = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -66,6 +84,7 @@ export const PlayerPanel: React.FC = () => {
   const onlinePlayers  = useAppStore((s) => s.onlinePlayers);
 
   const { alert, show } = useAlert();
+  const [collapsed, setCollapsed] = useState(false);
 
   // Input states
   const [kickName, setKickName]         = useState('');
@@ -171,6 +190,33 @@ export const PlayerPanel: React.FC = () => {
     ? 'var(--info)'
     : 'var(--accent)';
 
+  // Collapsed: render a thin strip with an expand button
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          width: 28,
+          flexShrink: 0,
+          background: 'var(--bg-surface)',
+          borderLeft: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          paddingTop: 8,
+        }}
+      >
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCollapsed(false)}
+          title="Expand Player Controls"
+          style={{ padding: 4, width: 22, height: 22 }}
+        >
+          <IconChevronLeft />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -185,13 +231,30 @@ export const PlayerPanel: React.FC = () => {
       }}
     >
       {/* Panel header */}
-      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border)' }}>
-        <span className="section-label">Player Controls</span>
-        {!isRunning && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Server must be running.
-          </div>
-        )}
+      <div style={{
+        padding: '10px 14px 8px',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+      }}>
+        <div>
+          <span className="section-label">Player Controls</span>
+          {!isRunning && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Server must be running.
+            </div>
+          )}
+        </div>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCollapsed(true)}
+          title="Collapse Player Controls"
+          style={{ padding: 4, width: 22, height: 22, flexShrink: 0 }}
+        >
+          <IconChevronRight />
+        </button>
       </div>
 
       {/* Alert banner */}
@@ -207,7 +270,7 @@ export const PlayerPanel: React.FC = () => {
           value={kickName}
           onChange={setKickName}
           onSubmit={handleKick}
-          placeholder={players.length === 0 ? '(no players online)' : 'Select or type player'}
+          placeholder={`${players.length} Online`}
           disabled={!isRunning}
           players={players}
         />
@@ -271,10 +334,10 @@ export const PlayerPanel: React.FC = () => {
           players={players}
         />
         <Row>
-          <button className="btn btn-ghost" onClick={handleWlRemove} disabled={!isRunning} style={{ flex: 1 }}>
+          <button className="btn btn-surface" onClick={handleWlRemove} disabled={!isRunning} style={{ flex: 1 }}>
             Remove
           </button>
-          <button className="btn btn-ghost" onClick={() => send('whitelist reload', 'Whitelist reloaded.')} disabled={!isRunning} style={{ flex: 1 }}>
+          <button className="btn btn-surface" onClick={() => send('whitelist reload', 'Whitelist reloaded.')} disabled={!isRunning} style={{ flex: 1 }}>
             Reload
           </button>
         </Row>

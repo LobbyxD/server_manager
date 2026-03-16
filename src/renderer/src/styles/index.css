@@ -142,7 +142,11 @@
   /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium
-           transition-all duration-150 cursor-pointer border-0 outline-none focus-visible:ring-2;
+           transition-all duration-150 cursor-pointer border-0 outline-none;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
   }
   .btn:disabled {
     @apply opacity-40 cursor-not-allowed;
@@ -190,7 +194,11 @@
     user-select: text;
   }
   .field::placeholder { color: var(--text-muted); }
-  .field:focus { border-color: var(--border-focus); }
+  .field:focus {
+    border-color: var(--border-focus);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-focus) 20%, transparent);
+  }
 
   /* Panel / card */
   .panel {
@@ -232,6 +240,11 @@
     cursor: pointer;
     transition: background var(--transition), border-color var(--transition);
     flex-shrink: 0;
+    outline: none;
+  }
+  .toggle-track:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
   }
   .toggle-track.on {
     background: var(--accent);

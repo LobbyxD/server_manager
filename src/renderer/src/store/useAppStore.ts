@@ -15,8 +15,10 @@ interface AppState {
   servers: ServerProfile[];
   activeServerId: string | null;
   serverStatuses: Record<string, ServerStatus>;
-  /** Per-server log ring buffer. */
+  /** Per-server log ring buffer (capped at MAX_LOG_LINES). */
   serverLogs: Record<string, LogLine[]>;
+  /** Total lines ever received per server, including those trimmed from the buffer. */
+  logLineCount: Record<string, number>;
   /** Online player names per server, populated after a 'list' command. */
   onlinePlayers: Record<string, string[]>;
   settings: AppSettings;
@@ -38,8 +40,11 @@ interface AppState {
 
   appendLog: (serverId: string, line: LogLine) => void;
   clearLogs: (serverId: string) => void;
+  resetLogCount: (serverId: string) => void;
 
   setOnlinePlayers: (serverId: string, players: string[]) => void;
+  addOnlinePlayer: (serverId: string, player: string) => void;
+  removeOnlinePlayer: (serverId: string, player: string) => void;
 
   setSettings: (settings: AppSettings) => void;
   patchSettings: (patch: Partial<AppSettings>) => void;
@@ -54,8 +59,9 @@ export const useAppStore = create<AppState>((set) => ({
   activeServerId: null,
   serverStatuses: {},
   serverLogs: {},
+  logLineCount: {},
   onlinePlayers: {},
-  settings: { theme: 'dark', minimizeToTray: true, fontSize: 13, maxConcurrentServers: 1, debugMode: false },
+  settings: { theme: 'dark', minimizeToTray: true, fontSize: 13, maxConcurrentServers: 1, debugMode: false, backupLimit: 5 },
   isSettingsOpen: false,
   isServerFormOpen: false,
   editingServer: null,
@@ -74,16 +80,10 @@ export const useAppStore = create<AppState>((set) => ({
   removeServer: (id) =>
     set((s) => ({
       servers: s.servers.filter((x) => x.id !== id),
-      // Clean up associated state
-      serverLogs: Object.fromEntries(
-        Object.entries(s.serverLogs).filter(([k]) => k !== id),
-      ),
-      onlinePlayers: Object.fromEntries(
-        Object.entries(s.onlinePlayers).filter(([k]) => k !== id),
-      ),
-      serverStatuses: Object.fromEntries(
-        Object.entries(s.serverStatuses).filter(([k]) => k !== id),
-      ),
+      serverLogs: Object.fromEntries(Object.entries(s.serverLogs).filter(([k]) => k !== id)),
+      logLineCount: Object.fromEntries(Object.entries(s.logLineCount).filter(([k]) => k !== id)),
+      onlinePlayers: Object.fromEntries(Object.entries(s.onlinePlayers).filter(([k]) => k !== id)),
+      serverStatuses: Object.fromEntries(Object.entries(s.serverStatuses).filter(([k]) => k !== id)),
       activeServerId: s.activeServerId === id ? null : s.activeServerId,
     })),
 
@@ -100,22 +100,43 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => {
       const existing = s.serverLogs[serverId] ?? [];
       const appended = [...existing, line];
-      // Trim to keep memory bounded
       const trimmed =
         appended.length > MAX_LOG_LINES
           ? appended.slice(appended.length - MAX_LOG_LINES)
           : appended;
-      return { serverLogs: { ...s.serverLogs, [serverId]: trimmed } };
+      return {
+        serverLogs: { ...s.serverLogs, [serverId]: trimmed },
+        logLineCount: { ...s.logLineCount, [serverId]: (s.logLineCount[serverId] ?? 0) + 1 },
+      };
     }),
 
   clearLogs: (serverId) =>
-    set((s) => ({ serverLogs: { ...s.serverLogs, [serverId]: [] } })),
+    set((s) => ({
+      serverLogs: { ...s.serverLogs, [serverId]: [] },
+      logLineCount: { ...s.logLineCount, [serverId]: 0 },
+    })),
+
+  resetLogCount: (serverId) =>
+    set((s) => ({ logLineCount: { ...s.logLineCount, [serverId]: 0 } })),
 
   // --- Players ------------------------------------------------------------
   setOnlinePlayers: (serverId, players) =>
     set((s) => ({
       onlinePlayers: { ...s.onlinePlayers, [serverId]: players },
     })),
+
+  addOnlinePlayer: (serverId, player) =>
+    set((s) => {
+      const existing = s.onlinePlayers[serverId] ?? [];
+      if (existing.includes(player)) return s;
+      return { onlinePlayers: { ...s.onlinePlayers, [serverId]: [...existing, player] } };
+    }),
+
+  removeOnlinePlayer: (serverId, player) =>
+    set((s) => {
+      const existing = s.onlinePlayers[serverId] ?? [];
+      return { onlinePlayers: { ...s.onlinePlayers, [serverId]: existing.filter((p) => p !== player) } };
+    }),
 
   // --- Settings actions ---------------------------------------------------
   setSettings: (settings) => set({ settings }),

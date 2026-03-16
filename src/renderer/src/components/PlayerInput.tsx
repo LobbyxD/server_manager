@@ -1,9 +1,10 @@
 /**
- * PlayerInput – a text input with an inline autocomplete dropdown
- * that suggests names from the online players list.
+ * PlayerInput – a combobox with text input + dropdown toggle.
  *
- * Typing narrows the suggestions; the user can also type any name freely
- * (e.g. for offline players that need to be banned or pardoned).
+ * • Clicking the ▾ chevron opens/closes the full player list.
+ * • Typing filters the list to matching names (prefix, case-insensitive).
+ * • Arrow keys navigate the list; Enter selects or submits.
+ * • Free-text entry is always allowed (e.g. offline players for ban/pardon).
  */
 
 import React, { useRef, useState, useCallback } from 'react';
@@ -11,7 +12,7 @@ import React, { useRef, useState, useCallback } from 'react';
 interface PlayerInputProps {
   value: string;
   onChange: (value: string) => void;
-  /** Called when Enter is pressed and no dropdown item is highlighted. */
+  /** Called when Enter is pressed with no dropdown item highlighted. */
   onSubmit?: () => void;
   placeholder?: string;
   disabled?: boolean;
@@ -29,15 +30,15 @@ export const PlayerInput: React.FC<PlayerInputProps> = ({
   players,
   style,
 }) => {
-  const [open, setOpen]         = useState(false);
+  const [open, setOpen]           = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  const inputRef                = useRef<HTMLInputElement>(null);
+  const inputRef                  = useRef<HTMLInputElement>(null);
+  const containerRef              = useRef<HTMLDivElement>(null);
 
-  // Filter suggestions: if the user has typed something, match by prefix
-  // (case-insensitive); otherwise show all online players.
-  const suggestions = players.filter((p) =>
-    value.trim() === '' || p.toLowerCase().startsWith(value.toLowerCase()),
-  );
+  // Filter by what's typed; empty input shows all players
+  const suggestions = value.trim() === ''
+    ? players
+    : players.filter((p) => p.toLowerCase().startsWith(value.toLowerCase()));
 
   const select = useCallback(
     (name: string) => {
@@ -94,42 +95,93 @@ export const PlayerInput: React.FC<PlayerInputProps> = ({
     if (players.length > 0) setOpen(true);
   };
 
-  const handleBlur = () => {
-    // Delay close so mouse-click on a suggestion fires first.
+  // Delay close so mouse-click on a suggestion or the chevron fires first.
+  const handleBlur = (e: React.FocusEvent) => {
+    if (containerRef.current?.contains(e.relatedTarget as Node)) return;
     setTimeout(() => setOpen(false), 120);
   };
 
-  return (
-    <div style={{ position: 'relative', ...style }}>
-      <input
-        ref={inputRef}
-        className="field"
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        disabled={disabled}
-        autoComplete="off"
-        style={{ width: '100%' }}
-      />
+  const toggleDropdown = () => {
+    if (disabled) return;
+    setOpen((o) => !o);
+    setHighlight(-1);
+    inputRef.current?.focus();
+  };
 
+  return (
+    <div ref={containerRef} style={{ position: 'relative', ...style }}>
+      {/* ── Combobox row ──────────────────────────────────────────────── */}
+      <div style={{ position: 'relative', display: 'flex' }}>
+        <input
+          ref={inputRef}
+          className="field"
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          disabled={disabled}
+          autoComplete="off"
+          style={{ flex: 1, paddingRight: players.length > 0 && !disabled ? 26 : undefined }}
+        />
+
+        {/* Chevron toggle — only shown when there are players to suggest */}
+        {players.length > 0 && !disabled && (
+          <button
+            tabIndex={-1}
+            onMouseDown={(e) => { e.preventDefault(); toggleDropdown(); }}
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 26,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: open ? 'var(--accent)' : 'var(--text-muted)',
+              padding: 0,
+              transition: 'color 0.15s',
+            }}
+            title="Show online players"
+          >
+            {/* Chevron rotates when open */}
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+            >
+              <polyline points="1,1 5,5 9,1" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* ── Dropdown ──────────────────────────────────────────────────── */}
       {open && suggestions.length > 0 && !disabled && (
         <div
           style={{
             position: 'absolute',
-            top: '100%',
+            top: 'calc(100% + 2px)',
             left: 0,
             right: 0,
             zIndex: 1000,
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            marginTop: 2,
-            maxHeight: 160,
+            boxShadow: '0 6px 16px rgba(0,0,0,0.35)',
+            maxHeight: 180,
             overflowY: 'auto',
           }}
         >
@@ -138,17 +190,44 @@ export const PlayerInput: React.FC<PlayerInputProps> = ({
               key={name}
               onMouseDown={(e) => { e.preventDefault(); select(name); }}
               style={{
+                display: 'flex',
+                alignItems: 'center',
                 padding: '5px 10px',
                 fontSize: 12,
                 cursor: 'pointer',
                 color: i === highlight ? 'var(--accent)' : 'var(--text-primary)',
-                background: i === highlight ? 'var(--bg-surface)' : 'transparent',
+                background: i === highlight ? 'var(--bg-hover)' : 'transparent',
                 userSelect: 'none',
+                gap: 8,
               }}
             >
+              {/* Small player dot */}
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, opacity: 0.7 }} />
               {name}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Empty state dropdown when open but nothing matches typed text */}
+      {open && suggestions.length === 0 && value.trim() !== '' && players.length > 0 && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 2px)',
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            boxShadow: '0 6px 16px rgba(0,0,0,0.35)',
+            padding: '6px 10px',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+          }}
+        >
+          No online player matches "{value}"
         </div>
       )}
     </div>

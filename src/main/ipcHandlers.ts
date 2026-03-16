@@ -6,13 +6,15 @@
  * log events and status changes can be broadcast to the renderer.
  */
 
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import fs from 'fs';
+import path from 'path';
 import { spawnSync } from 'child_process';
 import { ServerProcess } from './serverProcess';
 import { getServers, setServers, getSettings, setSettings, getRunningPids, setRunningPid, clearRunningPid } from './store';
 import { IPC, LogLine, ServerProfile } from '../shared/types';
 import { unlockAchievement, ACH } from './steam';
+import { createBackup, listBackups, restoreBackup, deleteBackup } from './backupManager';
 
 /** Live process registry keyed by server profile ID. */
 const processes = new Map<string, ServerProcess>();
@@ -44,6 +46,36 @@ function getOrCreate(id: string): ServerProcess {
   proc.on('stopped', () => {
     clearRunningPid(id);
     broadcast(IPC.SERVER_STATUS_CHANGE, id, 'stopped');
+
+    // Auto-backup: runs asynchronously so it doesn't block the stopped event.
+    const profile = getServers().find((s) => s.id === id);
+    if (profile?.autoBackup) {
+      const limit = getSettings().backupLimit ?? 5;
+      broadcast(IPC.LOG_LINE, id, {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        text: '[Manager] Auto-backup: creating world backup...',
+        type: 'out',
+      } satisfies LogLine);
+
+      createBackup(profile.batPath, limit)
+        .then((entry) => {
+          broadcast(IPC.LOG_LINE, id, {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            text: `[Manager] Auto-backup saved: ${entry.filename} (${(entry.sizeBytes / 1024 / 1024).toFixed(1)} MB)`,
+            type: 'out',
+          } satisfies LogLine);
+        })
+        .catch((err: Error) => {
+          broadcast(IPC.LOG_LINE, id, {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            text: `[Manager] Auto-backup failed: ${err.message}`,
+            type: 'err',
+          } satisfies LogLine);
+        });
+    }
   });
 
   proc.on('error', (err: Error) => {
@@ -237,6 +269,62 @@ export function registerIpcHandlers(): void {
       properties: ['openFile'],
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle(IPC.DIALOG_OPEN_FILE, async (_event, title?: string) => {
+    const result = await dialog.showOpenDialog({
+      title: title ?? 'Select File',
+      filters: [{ name: 'Text Files', extensions: ['txt', 'properties', 'cfg', 'conf', 'json', 'yaml', 'yml'] }, { name: 'All Files', extensions: ['*'] }],
+      properties: ['openFile'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle(IPC.SHELL_OPEN_FOLDER, async (_event, filePath: string) => {
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, async (_event, url: string) => {
+    await shell.openExternal(url);
+    return { success: true };
+  });
+
+  // --- Backup -----------------------------------------------------------
+
+  ipcMain.handle(IPC.BACKUP_LIST, async (_event, id: string) => {
+    const profile = requireProfile(id);
+    return listBackups(profile.batPath);
+  });
+
+  ipcMain.handle(IPC.BACKUP_CREATE, async (_event, id: string) => {
+    const profile = requireProfile(id);
+    const limit = getSettings().backupLimit ?? 5;
+    return createBackup(profile.batPath, limit);
+  });
+
+  ipcMain.handle(IPC.BACKUP_RESTORE, async (_event, id: string, backupFilePath: string) => {
+    const proc = processes.get(id);
+    if (proc?.isRunning) {
+      throw new Error('Stop the server before restoring a backup.');
+    }
+    const profile = requireProfile(id);
+    await restoreBackup(profile.batPath, backupFilePath);
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC.BACKUP_DELETE, async (_event, _id: string, backupFilePath: string) => {
+    deleteBackup(backupFilePath);
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC.BACKUP_OPEN_FOLDER, async (_event, id: string) => {
+    const profile = requireProfile(id);
+    const serverDir = path.dirname(profile.batPath);
+    const backupDir = path.join(serverDir, 'World Backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    await shell.openPath(backupDir);
+    return { success: true };
   });
 }
 
