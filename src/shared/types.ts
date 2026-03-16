@@ -80,6 +80,29 @@ export const USER_FRIENDLY_ERRORS: Record<string, string> = {
     "Another server is already running. Stop it first before starting a new one, or go to Settings and increase the server limit.",
 };
 
+// ---------------------------------------------------------------------------
+// Updater
+// ---------------------------------------------------------------------------
+
+export type UpdaterState =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'ready'
+  | 'error';
+
+export interface UpdaterStatus {
+  state: UpdaterState;
+  /** Populated when state === 'available' | 'downloading' | 'ready' */
+  version?: string;
+  /** 0–100, populated when state === 'downloading' */
+  percent?: number;
+  /** Populated when state === 'error' */
+  error?: string;
+}
+
 /** Type-safe IPC channel name constants shared by main and renderer. */
 export const IPC = {
   SERVER_START: 'server:start',
@@ -128,4 +151,11 @@ export const IPC = {
   QUIT_FORCE: 'quit:force',
   /** Renderer→main: cancel the quit – do nothing. */
   QUIT_CANCEL: 'quit:cancel',
+
+  // Updater — renderer → main (ipcMain.handle)
+  UPDATER_CHECK:    'updater:checkForUpdates',
+  UPDATER_DOWNLOAD: 'updater:downloadUpdate',
+  UPDATER_INSTALL:  'updater:installUpdate',
+  // Updater — main → renderer push
+  UPDATER_STATUS:   'updater:status',
 } as const;

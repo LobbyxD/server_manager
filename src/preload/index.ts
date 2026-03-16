@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC, LogLine, ServerProfile, AppSettings, BackupEntry } from '../shared/types';
+import { IPC, LogLine, ServerProfile, AppSettings, BackupEntry, UpdaterStatus } from '../shared/types';
 
 // ---------------------------------------------------------------------------
 // Type-safe wrapper functions
@@ -131,6 +131,16 @@ const api = {
     ) => callback(names);
     ipcRenderer.on(IPC.QUIT_REQUEST, handler);
     return () => ipcRenderer.removeListener(IPC.QUIT_REQUEST, handler);
+  },
+
+  // --- Updater ------------------------------------------------------------
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATER_CHECK),
+  downloadUpdate:  (): Promise<void> => ipcRenderer.invoke(IPC.UPDATER_DOWNLOAD),
+  installUpdate:   (): Promise<void> => ipcRenderer.invoke(IPC.UPDATER_INSTALL),
+  onUpdaterStatus: (callback: (status: UpdaterStatus) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, status: UpdaterStatus) => callback(status);
+    ipcRenderer.on(IPC.UPDATER_STATUS, handler);
+    return () => ipcRenderer.removeListener(IPC.UPDATER_STATUS, handler);
   },
 
   /** Gracefully stop all servers then quit the app. */

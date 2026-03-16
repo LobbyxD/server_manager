@@ -111,6 +111,7 @@ export const Settings: React.FC = () => {
   const settings        = useAppStore((s) => s.settings);
   const setSettings     = useAppStore((s) => s.setSettings);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
+  const updaterStatus   = useAppStore((s) => s.updaterStatus);
 
   // Local draft – only committed on Save.
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
@@ -363,16 +364,96 @@ export const Settings: React.FC = () => {
           </button>
         </div>
 
-        {/* Version watermark */}
+        {/* Updates */}
         <div
           style={{
-            marginTop: 16,
-            textAlign: 'center',
-            fontSize: 11,
-            color: 'var(--text-muted)',
+            marginTop: 20,
+            paddingTop: 16,
+            borderTop: '1px solid var(--border)',
           }}
         >
-          Minecraft Server Manager v1.0.0
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+              marginBottom: 10,
+            }}
+          >
+            UPDATES
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            {/* Status text */}
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
+              {updaterStatus.state === 'idle' && 'Minecraft Server Manager v1.0.0'}
+              {updaterStatus.state === 'checking' && 'Checking for updates…'}
+              {updaterStatus.state === 'not-available' && 'You\'re on the latest version (v1.0.0)'}
+              {updaterStatus.state === 'available' && `Update v${updaterStatus.version} is available`}
+              {updaterStatus.state === 'downloading' && (
+                <div>
+                  <div style={{ marginBottom: 4 }}>
+                    Downloading v{updaterStatus.version}… {updaterStatus.percent ?? 0}%
+                  </div>
+                  <div
+                    style={{
+                      height: 4,
+                      borderRadius: 2,
+                      background: 'var(--bg-elevated)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${updaterStatus.percent ?? 0}%`,
+                        background: 'var(--accent)',
+                        transition: 'width 0.3s',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {updaterStatus.state === 'ready' && `v${updaterStatus.version} ready — click Restart to install`}
+              {updaterStatus.state === 'error' && `Update check failed: ${updaterStatus.error}`}
+            </div>
+
+            {/* Action button */}
+            {(updaterStatus.state === 'idle' || updaterStatus.state === 'not-available' || updaterStatus.state === 'error') && (
+              <button
+                className="btn btn-surface"
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => window.api.checkForUpdates()}
+              >
+                Check for Updates
+              </button>
+            )}
+            {updaterStatus.state === 'available' && (
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => window.api.downloadUpdate()}
+              >
+                Download
+              </button>
+            )}
+            {updaterStatus.state === 'ready' && (
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => window.api.installUpdate()}
+              >
+                Restart &amp; Install
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

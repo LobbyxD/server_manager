@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import { ServerProfile, AppSettings, LogLine, ServerStatus } from '../../../shared/types';
+import { ServerProfile, AppSettings, LogLine, ServerStatus, UpdaterStatus } from '../../../shared/types';
 
 /** Maximum number of log lines retained per server before oldest are dropped. */
 const MAX_LOG_LINES = 2000;
@@ -51,6 +51,10 @@ interface AppState {
 
   setSettingsOpen: (open: boolean) => void;
   setServerFormOpen: (open: boolean, server?: ServerProfile | null) => void;
+
+  // --- Updater state ------------------------------------------------------
+  updaterStatus: UpdaterStatus;
+  setUpdaterStatus: (status: UpdaterStatus) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -65,6 +69,7 @@ export const useAppStore = create<AppState>((set) => ({
   isSettingsOpen: false,
   isServerFormOpen: false,
   editingServer: null,
+  updaterStatus: { state: 'idle' },
 
   // --- Server profile actions --------------------------------------------
   setServers: (servers) => set({ servers }),
@@ -149,4 +154,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   setServerFormOpen: (open, server = null) =>
     set({ isServerFormOpen: open, editingServer: server ?? null }),
+
+  setUpdaterStatus: (status) => set({ updaterStatus: status }),
 }));

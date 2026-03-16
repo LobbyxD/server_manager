@@ -8,7 +8,7 @@
  *  - Force-kill all servers before quit.
  */
 
-import { app, dialog, ipcMain, BrowserWindow } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
 import { createWindow, mainWindow } from './window';
 import { createTray, destroyTray } from './tray';
 import {
@@ -20,7 +20,7 @@ import {
 } from './ipcHandlers';
 import { getSettings } from './store';
 import { IPC } from '../shared/types';
-import { initSteam, shutdownSteam, unlockAchievement, ACH } from './steam';
+import { setupUpdater, checkForUpdatesOnLaunch } from './updater';
 
 // ---------------------------------------------------------------------------
 // Single-instance guard
@@ -71,18 +71,9 @@ ipcMain.handle(IPC.WINDOW_IS_MAXIMIZED, () => mainWindow?.isMaximized() ?? false
 
 app.whenReady().then(() => {
   registerIpcHandlers();
-
-  // Steamworks ownership check (production only – no-op in dev builds).
-  if (!initSteam()) {
-    dialog.showErrorBox(
-      'Steam Required',
-      'Minecraft Server Manager requires Steam to be running and you must own this app.\n\nPlease open Steam and log in, then launch the app again.',
-    );
-    app.quit();
-    return;
-  }
-
+  setupUpdater();
   createWindow();
+  checkForUpdatesOnLaunch();
 
   /**
    * Called when the user explicitly chooses Quit from the tray context menu.
@@ -143,7 +134,6 @@ app.whenReady().then(() => {
 
   /** Graceful exit: send 'stop' to all servers, wait, then quit. */
   ipcMain.handle(IPC.QUIT_SAFE, async () => {
-    unlockAchievement(ACH.SAFE_EXIT);
     await stopAllServersSafe();
     quitConfirmed = true;
     app.quit();
@@ -173,7 +163,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   destroyTray();
-  shutdownSteam();
   // Last-resort cleanup – force-kill anything still alive.
   stopAllServers();
 });

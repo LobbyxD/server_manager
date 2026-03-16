@@ -25,7 +25,8 @@ export const App: React.FC = () => {
   const setActiveServer = useAppStore((s) => s.setActiveServer);
   const isSettingsOpen    = useAppStore((s) => s.isSettingsOpen);
   const isServerFormOpen  = useAppStore((s) => s.isServerFormOpen);
-  const setServerStatus   = useAppStore((s) => s.setServerStatus);
+  const setServerStatus    = useAppStore((s) => s.setServerStatus);
+  const setUpdaterStatus   = useAppStore((s) => s.setUpdaterStatus);
 
   /** Non-null when the quit dialog is open; holds the list of running server names. */
   const [quitServers, setQuitServers] = useState<string[] | null>(null);
@@ -38,6 +39,12 @@ export const App: React.FC = () => {
     const unsub = window.api.onQuitRequest((names) => setQuitServers(names));
     return unsub;
   }, []);
+
+  // Persist updater status across Settings modal open/close cycles.
+  useEffect(() => {
+    const unsub = window.api.onUpdaterStatus(setUpdaterStatus);
+    return unsub;
+  }, [setUpdaterStatus]);
 
   // Apply theme class to <html> whenever it changes.
   useEffect(() => {

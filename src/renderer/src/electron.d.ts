@@ -3,7 +3,7 @@
  * Mirrors the object exposed by src/preload/index.ts via contextBridge.
  */
 
-import { LogLine, ServerProfile, AppSettings, BackupEntry } from '../../shared/types';
+import { LogLine, ServerProfile, AppSettings, BackupEntry, UpdaterStatus } from '../../shared/types';
 
 declare global {
   interface Window {
@@ -51,6 +51,12 @@ declare global {
       maximizeWindow: () => void;
       closeWindow: () => void;
       isMaximized: () => Promise<boolean>;
+
+      // Updater
+      checkForUpdates: () => Promise<void>;
+      downloadUpdate: () => Promise<void>;
+      installUpdate: () => Promise<void>;
+      onUpdaterStatus: (callback: (status: UpdaterStatus) => void) => () => void;
 
       // Push event subscriptions
       onLog: (callback: (serverId: string, line: LogLine) => void) => () => void;

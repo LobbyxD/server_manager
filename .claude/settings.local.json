@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(find 'c:/Users/danie/OneDrive/Desktop/My Projects/Minecraft Server Manager/node_modules' -name *.node)"
+    ]
+  }
+}

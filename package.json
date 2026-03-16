@@ -3,16 +3,19 @@
   "productName": "Minecraft Server Manager",
   "version": "1.0.0",
   "description": "A modern desktop application for managing Minecraft server instances",
+  "author": "R2D2",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "electron-vite build && electron-builder"
+    "package": "electron-vite build && electron-builder",
+    "package:full": "npm run package && cd installer && npm run package",
+    "release": "electron-vite build && electron-builder --publish always"
   },
   "dependencies": {
     "electron-store": "^8.2.0",
-    "steamworks.js": "^0.4.0",
+    "electron-updater": "^6.8.3",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -33,15 +36,31 @@
   "build": {
     "appId": "com.danieldev.minecraft-server-manager",
     "productName": "Minecraft Server Manager",
-    "asar": false,
+    "asar": true,
+    "publish": {
+      "provider": "github",
+      "owner": "LobbyxD",
+      "repo": "server_manager",
+      "releaseType": "release"
+    },
     "win": {
       "icon": "resources/icon.ico",
       "target": [
         "nsis",
         "portable"
       ],
-      "sign": false,
-      "verifyUpdateCodeSignature": false
+      "signtoolOptions": {
+        "sign": "./scripts/sign.js",
+        "signingHashAlgorithms": [
+          "sha256"
+        ]
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "files": [
       "out/**/*",

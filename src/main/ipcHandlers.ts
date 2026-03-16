@@ -13,7 +13,6 @@ import { spawnSync } from 'child_process';
 import { ServerProcess } from './serverProcess';
 import { getServers, setServers, getSettings, setSettings, getRunningPids, setRunningPid, clearRunningPid } from './store';
 import { IPC, LogLine, ServerProfile } from '../shared/types';
-import { unlockAchievement, ACH } from './steam';
 import { createBackup, listBackups, restoreBackup, deleteBackup } from './backupManager';
 
 /** Live process registry keyed by server profile ID. */
@@ -148,13 +147,8 @@ export function registerIpcHandlers(): void {
         `SERVER_LIMIT: Server limit reached (${runningCount}/${limit} running). Stop a server first or raise the limit in Settings.`,
       );
     }
-    const willBeMultitasking = runningCount >= 1;
     const profile = requireProfile(id);
     const proc = getOrCreate(id);
-    proc.once('started', () => {
-      unlockAchievement(ACH.FIRST_SERVER);
-      if (willBeMultitasking) unlockAchievement(ACH.MULTITASKER);
-    });
     proc.spawn(profile.batPath);
     return { success: true };
   });
@@ -175,10 +169,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.SERVER_COMMAND, async (_event, id: string, cmd: string) => {
     const proc = processes.get(id);
     if (proc?.isRunning) proc.sendCommand(cmd);
-    const trimmed = cmd.trim();
-    if (trimmed.startsWith('ban '))       unlockAchievement(ACH.BAN_HAMMER);
-    else if (trimmed.startsWith('op '))   unlockAchievement(ACH.OP_GRANTED);
-    else if (trimmed === 'whitelist on')  unlockAchievement(ACH.WHITELIST);
     return { success: true };
   });
 
@@ -195,7 +185,6 @@ export function registerIpcHandlers(): void {
     }
     clearRunningPid(id);
     broadcast(IPC.SERVER_STATUS_CHANGE, id, 'stopped');
-    unlockAchievement(ACH.FORCE_KILLER);
     return { success: true };
   });
 

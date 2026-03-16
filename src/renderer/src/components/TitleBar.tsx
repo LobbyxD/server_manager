@@ -164,7 +164,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ serverName }) => {
         }}
       >
         <img
-          src="/icon.png"
+          src="./icon.png"
           alt="App icon"
           width={18}
           height={18}

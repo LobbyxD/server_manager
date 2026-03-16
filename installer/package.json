@@ -1,0 +1,53 @@
+{
+  "name": "minecraft-server-manager-installer",
+  "productName": "Minecraft Server Manager Setup",
+  "version": "1.0.0",
+  "description": "Installer for Minecraft Server Manager",
+  "author": "R2D2",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "package": "electron-vite build && electron-builder"
+  },
+  "dependencies": {
+    "winreg": "^1.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  },
+  "build": {
+    "appId": "com.danieldev.minecraft-server-manager-installer",
+    "productName": "Minecraft Server Manager Setup",
+    "asar": true,
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": "portable",
+      "requestedExecutionLevel": "requireAdministrator",
+      "executableName": "MinecraftServerManager-Setup"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/win-unpacked",
+        "to": "app",
+        "filter": ["**/*"]
+      }
+    ],
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "directories": {
+      "output": "installer-dist"
+    }
+  }
+}

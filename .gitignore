@@ -4,6 +4,9 @@ node_modules/
 # Build outputs
 out/
 dist/
+installer/out/
+installer/installer-dist/
+installer/node_modules/
 
 # Vite / electron-vite cache
 .vite/
@@ -22,6 +25,7 @@ desktop.ini
 .env
 .env.*
 !.env.example
+!.env.signing.example
 
 # Editor directories
 .idea/
