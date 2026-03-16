@@ -18,8 +18,8 @@ function createWindow(): void {
   } catch { /* ignore */ }
 
   win = new BrowserWindow({
-    width: 540,
-    height: 460,
+    width: 580,
+    height: 520,
     resizable: false,
     center: true,
     icon,

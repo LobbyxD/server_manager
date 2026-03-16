@@ -2,20 +2,19 @@ import React, { useState, useEffect } from 'react';
 import type { ProgressPayload } from '../../../preload/index';
 import { ProgressBar } from './ProgressBar';
 
-const DEFAULT_PATH = 'C:\\Minecraft Server Manager';
-
 interface Props {
   bundledVersion: string;
 }
 
 export const InstallView: React.FC<Props> = ({ bundledVersion }) => {
-  const [installPath,       setInstallPath]       = useState(DEFAULT_PATH);
+  const [installPath,       setInstallPath]       = useState('');
   const [desktopShortcut,   setDesktopShortcut]   = useState(true);
   const [startMenuShortcut, setStartMenuShortcut] = useState(true);
   const [installing,        setInstalling]        = useState(false);
   const [progress,          setProgress]          = useState<ProgressPayload | null>(null);
 
   useEffect(() => {
+    window.installer.getDefaultPath().then(setInstallPath);
     const unsub = window.installer.onProgress((p) => setProgress(p));
     return unsub;
   }, []);

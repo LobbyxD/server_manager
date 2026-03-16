@@ -1,13 +1,10 @@
 /**
- * IPC handlers for the installer.
- * Handles:
- *  - Detecting existing installation via Windows registry
- *  - Installing the bundled app files
- *  - Repairing an existing installation (overwrite files, keep user data)
- *  - Uninstalling (with optional user-data removal)
+ * IPC handlers for the custom installer.
+ * All registry operations use PowerShell to avoid reg.exe stderr/stdout
+ * parsing issues and to get reliable results on all Windows versions.
  */
 
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
@@ -16,141 +13,185 @@ import { execSync } from 'child_process';
 // Constants
 // ---------------------------------------------------------------------------
 
-const APP_ID   = 'com.danieldev.minecraft-server-manager';
-const APP_NAME = 'Minecraft Server Manager';
-const PUBLISHER = 'R2D2';
-const EXE_NAME  = `${APP_NAME}.exe`;
-const UNINSTALL_KEY = `SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_ID}`;
-const APPDATA_FOLDER = 'minecraft-server-manager'; // electron-store uses this
+const APP_ID        = 'com.danieldev.minecraft-server-manager';
+const APP_NAME      = 'Minecraft Server Manager';
+const PUBLISHER     = 'R2D2';
+const EXE_NAME      = `${APP_NAME}.exe`;
+const REG_BASE      = `HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall`;
+const APPDATA_DIR   = 'minecraft-server-manager'; // electron-store folder name
 
 // ---------------------------------------------------------------------------
-// Registry helpers (uses reg.exe to avoid native-module rebuild complexity)
+// PowerShell helper — runs a one-liner, returns trimmed stdout or null
 // ---------------------------------------------------------------------------
 
-function regQuery(key: string, value: string): string | null {
+function ps(command: string): string | null {
   try {
     const result = execSync(
-      `reg query "HKLM\\${key}" /v "${value}" 2>nul`,
-      { encoding: 'utf-8', windowsHide: true },
+      `powershell -NoProfile -NonInteractive -Command "${command.replace(/"/g, '\\"')}"`,
+      { encoding: 'utf-8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
     );
-    const match = result.match(/REG_SZ\s+(.+)/);
-    return match ? match[1].trim() : null;
+    const out = result.trim();
+    return out.length > 0 ? out : null;
   } catch {
     return null;
   }
 }
 
-function regWrite(key: string, values: Record<string, { type: 'REG_SZ' | 'REG_DWORD'; value: string }>): void {
-  execSync(`reg add "HKLM\\${key}" /f`, { windowsHide: true });
-  for (const [name, { type, value }] of Object.entries(values)) {
-    execSync(
-      `reg add "HKLM\\${key}" /v "${name}" /t ${type} /d "${value}" /f`,
-      { windowsHide: true },
-    );
+// ---------------------------------------------------------------------------
+// Detection — checks registry first, then falls back to well-known paths
+// ---------------------------------------------------------------------------
+
+interface DetectResult {
+  installed: boolean;
+  installPath?: string;
+  installedVersion?: string;
+}
+
+function detectInstallation(): DetectResult {
+  // 1. Our own registry key (written by this installer)
+  const ownPath = ps(
+    `(Get-ItemProperty -Path '${REG_BASE}\\${APP_ID}' -ErrorAction SilentlyContinue).InstallLocation`,
+  );
+  if (ownPath && fs.existsSync(path.join(ownPath, EXE_NAME))) {
+    const ver = ps(
+      `(Get-ItemProperty -Path '${REG_BASE}\\${APP_ID}' -ErrorAction SilentlyContinue).DisplayVersion`,
+    ) ?? undefined;
+    return { installed: true, installPath: ownPath, installedVersion: ver };
   }
-}
 
-function regDelete(key: string): void {
-  try {
-    execSync(`reg delete "HKLM\\${key}" /f 2>nul`, { windowsHide: true });
-  } catch { /* key didn't exist */ }
-}
+  // 2. Scan ALL uninstall keys for our display name (catches NSIS-installed versions)
+  const anyPath = ps(
+    `(Get-ItemProperty '${REG_BASE}\\*' -ErrorAction SilentlyContinue | ` +
+    `Where-Object { $_.DisplayName -eq '${APP_NAME}' } | ` +
+    `Select-Object -First 1 -ExpandProperty InstallLocation)`,
+  );
+  if (anyPath && fs.existsSync(path.join(anyPath, EXE_NAME))) {
+    return { installed: true, installPath: anyPath, installedVersion: undefined };
+  }
 
-// ---------------------------------------------------------------------------
-// Shortcut helpers (via PowerShell WScript.Shell — no extra npm package)
-// ---------------------------------------------------------------------------
+  // 3. Well-known filesystem paths
+  const drive = process.env.SystemDrive ?? 'C:';
+  const candidates = [
+    path.join(drive,                                         APP_NAME),
+    path.join(process.env.ProgramFiles ?? '',               APP_NAME),
+    path.join(process.env['ProgramFiles(x86)'] ?? '',       APP_NAME),
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(path.join(p, EXE_NAME))) {
+      return { installed: true, installPath: p, installedVersion: undefined };
+    }
+  }
 
-function createShortcut(target: string, destination: string, workingDir: string): void {
-  const ps = `
-$ws = New-Object -ComObject WScript.Shell
-$s = $ws.CreateShortcut('${destination.replace(/'/g, "''")}')
-$s.TargetPath = '${target.replace(/'/g, "''")}'
-$s.WorkingDirectory = '${workingDir.replace(/'/g, "''")}'
-$s.IconLocation = '${target.replace(/'/g, "''")}',0
-$s.Save()
-`.trim();
-  execSync(`powershell -NoProfile -NonInteractive -Command "${ps.replace(/"/g, '\\"')}"`, {
-    windowsHide: true,
-  });
-}
-
-function deleteShortcut(lnkPath: string): void {
-  try { fs.unlinkSync(lnkPath); } catch { /* already gone */ }
+  return { installed: false };
 }
 
 // ---------------------------------------------------------------------------
-// File copy with progress
+// Registry write / delete
+// ---------------------------------------------------------------------------
+
+function writeRegistry(installPath: string, version: string): void {
+  const exePath = path.join(installPath, EXE_NAME);
+  const cmds = [
+    `$k = '${REG_BASE}\\${APP_ID}'`,
+    `New-Item -Path $k -Force | Out-Null`,
+    `Set-ItemProperty -Path $k -Name DisplayName      -Value '${APP_NAME}'`,
+    `Set-ItemProperty -Path $k -Name DisplayVersion   -Value '${version}'`,
+    `Set-ItemProperty -Path $k -Name Publisher        -Value '${PUBLISHER}'`,
+    `Set-ItemProperty -Path $k -Name InstallLocation  -Value '${installPath}'`,
+    `Set-ItemProperty -Path $k -Name DisplayIcon      -Value '${exePath},0'`,
+    `Set-ItemProperty -Path $k -Name UninstallString  -Value '"${exePath}" --uninstall'`,
+    `Set-ItemProperty -Path $k -Name NoModify         -Value 1 -Type DWord`,
+    `Set-ItemProperty -Path $k -Name NoRepair         -Value 0 -Type DWord`,
+  ].join('; ');
+  ps(cmds);
+}
+
+function deleteRegistry(): void {
+  ps(`Remove-Item -Path '${REG_BASE}\\${APP_ID}' -Recurse -Force -ErrorAction SilentlyContinue`);
+}
+
+// ---------------------------------------------------------------------------
+// Shortcut helpers via PowerShell WScript.Shell
+// ---------------------------------------------------------------------------
+
+function createShortcut(target: string, dest: string, workDir: string): void {
+  const cmd = [
+    `$ws = New-Object -ComObject WScript.Shell`,
+    `$s = $ws.CreateShortcut('${dest}')`,
+    `$s.TargetPath = '${target}'`,
+    `$s.WorkingDirectory = '${workDir}'`,
+    `$s.IconLocation = '${target},0'`,
+    `$s.Save()`,
+  ].join('; ');
+  ps(cmd);
+}
+
+function deleteShortcutIfExists(lnkPath: string): void {
+  try { if (fs.existsSync(lnkPath)) fs.unlinkSync(lnkPath); } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
+// File-copy with per-file progress callbacks
 // ---------------------------------------------------------------------------
 
 function walkDir(dir: string): string[] {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const e of entries) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) files.push(...walkDir(full));
-    else files.push(full);
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkDir(full));
+    else out.push(full);
   }
-  return files;
+  return out;
 }
 
-function copyWithProgress(
+function copyTree(
   src: string,
   dest: string,
-  onProgress: (percent: number, file: string) => void,
+  onProgress: (pct: number, name: string) => void,
 ): void {
   const files = walkDir(src);
-  const total = files.length || 1;
+  const total = Math.max(files.length, 1);
   for (let i = 0; i < files.length; i++) {
-    const srcFile  = files[i];
-    const rel      = path.relative(src, srcFile);
-    const destFile = path.join(dest, rel);
-    fs.mkdirSync(path.dirname(destFile), { recursive: true });
-    fs.copyFileSync(srcFile, destFile);
-    onProgress(Math.floor(((i + 1) / total) * 100), rel);
+    const rel  = path.relative(src, files[i]);
+    const out  = path.join(dest, rel);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.copyFileSync(files[i], out);
+    onProgress(Math.floor(((i + 1) / total) * 100), path.basename(files[i]));
   }
 }
 
 // ---------------------------------------------------------------------------
-// Bundled app source path
+// Bundled app source & version
 // ---------------------------------------------------------------------------
 
-/**
- * In the packaged installer, the main app files live in process.resourcesPath/app/.
- * In dev, fall back to the workspace dist/win-unpacked directory.
- */
 function getBundledAppDir(): string {
-  if (process.env.NODE_ENV !== 'development') {
-    return path.join(process.resourcesPath, 'app');
+  if (process.env.NODE_ENV === 'development') {
+    return path.join(__dirname, '../../../../dist/win-unpacked');
   }
-  return path.join(__dirname, '../../../../dist/win-unpacked');
+  return path.join(process.resourcesPath, 'app');
 }
 
 function getBundledVersion(): string {
-  try {
-    const pkgPath = path.join(getBundledAppDir(), 'resources', 'app', 'package.json');
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    return pkg.version ?? '1.0.0';
-  } catch {
-    return '1.0.0';
-  }
+  // Use the installer's own version — kept in sync with the main app.
+  return app.getVersion();
 }
 
 // ---------------------------------------------------------------------------
-// Broadcast progress to renderer
+// Progress broadcast
 // ---------------------------------------------------------------------------
 
-type ProgressPayload = {
-  phase: 'copying' | 'registry' | 'shortcuts' | 'cleanup' | 'done' | 'error';
+type Phase = 'copying' | 'registry' | 'shortcuts' | 'cleanup' | 'done' | 'error';
+
+interface ProgressPayload {
+  phase: Phase;
   percent: number;
   message: string;
   error?: string;
-};
+}
 
-function broadcast(getWin: () => BrowserWindow | null, payload: ProgressPayload): void {
+function broadcast(getWin: () => BrowserWindow | null, p: ProgressPayload): void {
   const w = getWin();
-  if (w && !w.isDestroyed()) {
-    w.webContents.send('installer:progress', payload);
-  }
+  if (w && !w.isDestroyed()) w.webContents.send('installer:progress', p);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,155 +200,141 @@ function broadcast(getWin: () => BrowserWindow | null, payload: ProgressPayload)
 
 export function registerHandlers(getWin: () => BrowserWindow | null): void {
 
-  // --- Detect ---------------------------------------------------------------
+  // Detect existing installation
+  ipcMain.handle('installer:detect', () => detectInstallation());
 
-  ipcMain.handle('installer:detect', () => {
-    const installPath = regQuery(UNINSTALL_KEY, 'InstallLocation');
-    if (!installPath) return { installed: false };
-    const exeExists = fs.existsSync(path.join(installPath, EXE_NAME));
-    if (!exeExists) return { installed: false };
-    const installedVersion = regQuery(UNINSTALL_KEY, 'DisplayVersion') ?? undefined;
-    return { installed: true, installPath, installedVersion };
-  });
-
-  // --- Browse for directory -------------------------------------------------
-
+  // Directory picker
   ipcMain.handle('installer:browse', async () => {
-    const result = await dialog.showOpenDialog({
+    const res = await dialog.showOpenDialog({
       title: 'Choose Installation Folder',
       properties: ['openDirectory', 'createDirectory'],
     });
-    return result.canceled ? null : result.filePaths[0];
+    return res.canceled ? null : res.filePaths[0];
   });
 
-  // --- Get version of bundled app -------------------------------------------
-
+  // Version of the bundled app
   ipcMain.handle('installer:getVersion', () => getBundledVersion());
 
-  // --- Install --------------------------------------------------------------
+  // Default install path (system drive + app name)
+  ipcMain.handle('installer:getDefaultPath', () => {
+    const drive = process.env.SystemDrive ?? 'C:';
+    return path.join(drive, APP_NAME);
+  });
+
+  // ── INSTALL ──────────────────────────────────────────────────────────────
 
   ipcMain.handle(
     'installer:install',
-    async (_event, opts: { installPath: string; desktopShortcut: boolean; startMenuShortcut: boolean }) => {
-      const { installPath, desktopShortcut, startMenuShortcut } = opts;
+    (_event, opts: { installPath: string; desktopShortcut: boolean; startMenuShortcut: boolean }) => {
       const push = (p: ProgressPayload) => broadcast(getWin, p);
+      const { installPath, desktopShortcut, startMenuShortcut } = opts;
 
       try {
         push({ phase: 'copying', percent: 0, message: 'Copying files…' });
 
         fs.mkdirSync(installPath, { recursive: true });
-        const src = getBundledAppDir();
-
-        copyWithProgress(src, installPath, (pct, file) => {
-          push({ phase: 'copying', percent: Math.floor(pct * 0.8), message: `Copying ${path.basename(file)}…` });
+        copyTree(getBundledAppDir(), installPath, (pct, name) => {
+          push({ phase: 'copying', percent: Math.floor(pct * 0.80), message: `Copying ${name}…` });
         });
 
-        push({ phase: 'registry', percent: 80, message: 'Writing registry entries…' });
-        const exePath = path.join(installPath, EXE_NAME);
-        const version = getBundledVersion();
-        regWrite(UNINSTALL_KEY, {
-          DisplayName:      { type: 'REG_SZ',    value: APP_NAME },
-          DisplayVersion:   { type: 'REG_SZ',    value: version },
-          Publisher:        { type: 'REG_SZ',    value: PUBLISHER },
-          InstallLocation:  { type: 'REG_SZ',    value: installPath },
-          DisplayIcon:      { type: 'REG_SZ',    value: `${exePath},0` },
-          UninstallString:  { type: 'REG_SZ',    value: `"${exePath}" --uninstall` },
-          NoModify:         { type: 'REG_DWORD', value: '1' },
-          NoRepair:         { type: 'REG_DWORD', value: '0' },
-        });
+        push({ phase: 'registry', percent: 82, message: 'Writing registry…' });
+        writeRegistry(installPath, getBundledVersion());
 
         push({ phase: 'shortcuts', percent: 90, message: 'Creating shortcuts…' });
+        const exePath = path.join(installPath, EXE_NAME);
 
         if (desktopShortcut) {
           const desktop = path.join(process.env.PUBLIC ?? 'C:\\Users\\Public', 'Desktop');
           createShortcut(exePath, path.join(desktop, `${APP_NAME}.lnk`), installPath);
         }
-
         if (startMenuShortcut) {
-          const startMenu = path.join(
-            process.env.APPDATA ?? '',
-            'Microsoft', 'Windows', 'Start Menu', 'Programs',
-          );
-          fs.mkdirSync(startMenu, { recursive: true });
-          createShortcut(exePath, path.join(startMenu, `${APP_NAME}.lnk`), installPath);
+          const sm = path.join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+          fs.mkdirSync(sm, { recursive: true });
+          createShortcut(exePath, path.join(sm, `${APP_NAME}.lnk`), installPath);
         }
 
         push({ phase: 'done', percent: 100, message: 'Installation complete!' });
-      } catch (err: unknown) {
+      } catch (err) {
         push({ phase: 'error', percent: 0, message: 'Installation failed.', error: String(err) });
       }
     },
   );
 
-  // --- Repair ---------------------------------------------------------------
+  // ── REPAIR ───────────────────────────────────────────────────────────────
 
-  ipcMain.handle('installer:repair', async () => {
+  ipcMain.handle('installer:repair', () => {
     const push = (p: ProgressPayload) => broadcast(getWin, p);
-    try {
-      const installPath = regQuery(UNINSTALL_KEY, 'InstallLocation');
-      if (!installPath) throw new Error('Installation not found in registry.');
 
-      push({ phase: 'copying', percent: 0, message: 'Repairing — copying files…' });
-      const src = getBundledAppDir();
-      copyWithProgress(src, installPath, (pct, file) => {
-        push({ phase: 'copying', percent: pct, message: `Copying ${path.basename(file)}…` });
+    try {
+      const detected = detectInstallation();
+      if (!detected.installed || !detected.installPath) {
+        throw new Error('No installation found to repair.');
+      }
+
+      push({ phase: 'copying', percent: 0, message: 'Overwriting files…' });
+      copyTree(getBundledAppDir(), detected.installPath, (pct, name) => {
+        push({ phase: 'copying', percent: pct, message: `Copying ${name}…` });
       });
 
+      // Refresh the registry version entry
+      push({ phase: 'registry', percent: 98, message: 'Updating registry…' });
+      writeRegistry(detected.installPath, getBundledVersion());
+
       push({ phase: 'done', percent: 100, message: 'Repair complete!' });
-    } catch (err: unknown) {
+    } catch (err) {
       push({ phase: 'error', percent: 0, message: 'Repair failed.', error: String(err) });
     }
   });
 
-  // --- Uninstall ------------------------------------------------------------
+  // ── UNINSTALL ─────────────────────────────────────────────────────────────
 
-  ipcMain.handle('installer:uninstall', async (_event, { removeData }: { removeData: boolean }) => {
+  ipcMain.handle('installer:uninstall', (_event, { removeData }: { removeData: boolean }) => {
     const push = (p: ProgressPayload) => broadcast(getWin, p);
+
     try {
-      const installPath = regQuery(UNINSTALL_KEY, 'InstallLocation');
-      if (!installPath) throw new Error('Installation not found in registry.');
+      const detected = detectInstallation();
+      if (!detected.installed || !detected.installPath) {
+        throw new Error('No installation found.');
+      }
+      const installPath = detected.installPath;
 
       push({ phase: 'cleanup', percent: 10, message: 'Removing shortcuts…' });
-
-      // Remove shortcuts from known locations.
-      const desktop   = path.join(process.env.PUBLIC ?? 'C:\\Users\\Public', 'Desktop');
-      const startMenu = path.join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
-      deleteShortcut(path.join(desktop,   `${APP_NAME}.lnk`));
-      deleteShortcut(path.join(startMenu, `${APP_NAME}.lnk`));
+      const desktop = path.join(process.env.PUBLIC ?? 'C:\\Users\\Public', 'Desktop');
+      const sm      = path.join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+      deleteShortcutIfExists(path.join(desktop, `${APP_NAME}.lnk`));
+      deleteShortcutIfExists(path.join(sm,      `${APP_NAME}.lnk`));
 
       push({ phase: 'cleanup', percent: 30, message: 'Removing registry entries…' });
-      regDelete(UNINSTALL_KEY);
+      deleteRegistry();
 
       if (removeData) {
         push({ phase: 'cleanup', percent: 50, message: 'Removing user data…' });
-        const appData = path.join(process.env.APPDATA ?? '', APPDATA_FOLDER);
-        if (fs.existsSync(appData)) fs.rmSync(appData, { recursive: true, force: true });
+        const data = path.join(process.env.APPDATA ?? '', APPDATA_DIR);
+        if (fs.existsSync(data)) fs.rmSync(data, { recursive: true, force: true });
       }
 
       push({ phase: 'cleanup', percent: 70, message: 'Removing application files…' });
 
-      // The main exe is running (this installer), so we schedule deletion via cmd.
-      // For robustness we delete all files except the installer exe itself.
-      // A simple approach: use a bat file that runs after this process exits.
-      const batPath = path.join(installPath, '__uninstall__.bat');
-      const batContent = [
+      // Schedule deletion of install folder via a detached bat after this process exits.
+      const bat = path.join(installPath, '__uninstall__.bat');
+      fs.writeFileSync(bat, [
         '@echo off',
         'timeout /t 2 /nobreak >nul',
         `rd /s /q "${installPath}"`,
-        'del "%~f0"',
-      ].join('\r\n');
-      fs.writeFileSync(batPath, batContent);
-      execSync(`start "" /min "${batPath}"`, { windowsHide: true, detached: true } as never);
+      ].join('\r\n'));
 
-      push({ phase: 'done', percent: 100, message: 'Uninstall complete.' });
-    } catch (err: unknown) {
+      const { spawn } = require('child_process');
+      spawn('cmd.exe', ['/c', bat], { detached: true, windowsHide: true, stdio: 'ignore' }).unref();
+
+      push({ phase: 'done', percent: 100, message: 'Uninstalled successfully.' });
+    } catch (err) {
       push({ phase: 'error', percent: 0, message: 'Uninstall failed.', error: String(err) });
     }
   });
 
-  // --- Open folder ----------------------------------------------------------
-
+  // Open a folder in Explorer
   ipcMain.handle('installer:openFolder', (_event, folderPath: string) => {
-    try { execSync(`explorer "${folderPath}"`, { windowsHide: false }); } catch { /* ignore */ }
+    const { spawn } = require('child_process');
+    spawn('explorer.exe', [folderPath], { detached: true, windowsHide: false }).unref();
   });
 }
