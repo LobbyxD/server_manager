@@ -38,29 +38,25 @@ function loadIcon(): Electron.NativeImage {
   return nativeImage.createFromDataURL(`data:image/png;base64,${FALLBACK_ICON_B64}`);
 }
 
-function buildContextMenu(): Electron.Menu {
+function buildContextMenu(onQuit: () => void): Electron.Menu {
   return Menu.buildFromTemplate([
     {
       label: 'Open Minecraft Server Manager',
       click: () => {
-        mainWindow?.show();
-        mainWindow?.focus();
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.show();
+        mainWindow.focus();
       },
     },
     { type: 'separator' },
     {
       label: 'Quit',
-      click: () => {
-        // Show the window first so the quit dialog is visible if servers are running.
-        mainWindow?.show();
-        mainWindow?.focus();
-        mainWindow?.close(); // triggers the 'close' event → quit dialog check
-      },
+      click: onQuit,
     },
   ]);
 }
 
-export function createTray(): void {
+export function createTray(onQuit: () => void): void {
   try {
     tray = new Tray(loadIcon());
   } catch (err) {
@@ -68,11 +64,11 @@ export function createTray(): void {
     return;
   }
   tray.setToolTip('Minecraft Server Manager');
-  tray.setContextMenu(buildContextMenu());
+  tray.setContextMenu(buildContextMenu(onQuit));
 
   // Single left-click toggles the window.
   tray.on('click', () => {
-    if (!mainWindow) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {

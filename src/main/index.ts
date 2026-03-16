@@ -58,14 +58,9 @@ ipcMain.on(IPC.WINDOW_MAXIMIZE, () => {
 });
 
 ipcMain.on(IPC.WINDOW_CLOSE, () => {
-  const { minimizeToTray } = getSettings();
-  if (minimizeToTray) {
-    // Just hide – never show the quit dialog for a tray-hide action.
-    mainWindow?.hide();
-  } else {
-    // Trigger the window's 'close' event so the quit dialog can intercept it.
-    mainWindow?.close();
-  }
+  // Delegate entirely to the 'close' event handler below, which decides
+  // whether to hide (minimize-to-tray) or show the quit dialog.
+  mainWindow?.close();
 });
 
 ipcMain.handle(IPC.WINDOW_IS_MAXIMIZED, () => mainWindow?.isMaximized() ?? false);
@@ -88,7 +83,26 @@ app.whenReady().then(() => {
   }
 
   createWindow();
-  createTray();
+
+  /**
+   * Called when the user explicitly chooses Quit from the tray context menu.
+   * Bypasses minimize-to-tray logic: always quits (or shows the quit dialog
+   * if servers are still running).
+   */
+  const onTrayQuit = () => {
+    const running = getRunningServerNames();
+    if (running.length > 0) {
+      // Servers running – show the window so the quit dialog is visible.
+      mainWindow?.show();
+      mainWindow?.focus();
+      mainWindow?.webContents.send(IPC.QUIT_REQUEST, running);
+    } else {
+      quitConfirmed = true;
+      app.quit();
+    }
+  };
+
+  createTray(onTrayQuit);
   startAutoStartServers();
 
   // ---------------------------------------------------------------------------
@@ -96,20 +110,35 @@ app.whenReady().then(() => {
   // ---------------------------------------------------------------------------
 
   /**
-   * When true, the quit has already been confirmed by the user (or there were
-   * no running servers). The 'close' event handler will not intercept it.
+   * When true, the close event should proceed to actually destroy the window
+   * (the user confirmed quit, or there were no running servers and tray is off).
    */
   let quitConfirmed = false;
 
   mainWindow!.on('close', (e) => {
-    if (quitConfirmed) return; // already confirmed – let Electron proceed
+    if (quitConfirmed) return; // confirmed – let Electron destroy the window
+
+    // Always intercept the close so the window is never silently destroyed.
+    e.preventDefault();
 
     const running = getRunningServerNames();
-    if (running.length === 0) return; // nothing running, close normally
 
-    // Prevent the default close and ask the renderer what to do.
-    e.preventDefault();
-    mainWindow!.webContents.send(IPC.QUIT_REQUEST, running);
+    if (running.length > 0) {
+      // Servers are running – show the window and ask the user what to do.
+      mainWindow!.show();
+      mainWindow!.focus();
+      mainWindow!.webContents.send(IPC.QUIT_REQUEST, running);
+      return;
+    }
+
+    // No servers running. Respect minimize-to-tray vs actual quit.
+    const { minimizeToTray } = getSettings();
+    if (minimizeToTray) {
+      mainWindow!.hide();
+    } else {
+      quitConfirmed = true;
+      app.quit();
+    }
   });
 
   /** Graceful exit: send 'stop' to all servers, wait, then quit. */
@@ -127,7 +156,7 @@ app.whenReady().then(() => {
     app.quit();
   });
 
-  /** Cancel: do nothing – window stays open. */
+  /** Cancel: do nothing – window stays hidden/open. */
   ipcMain.handle(IPC.QUIT_CANCEL, () => { /* no-op */ });
 
   // macOS: re-create the window when the dock icon is clicked and no windows exist.
@@ -136,16 +165,10 @@ app.whenReady().then(() => {
   });
 });
 
-// On Windows/Linux: only keep alive if minimizeToTray is enabled.
-// If tray is disabled, quit normally when the window is closed.
+// The close event handler above always prevents window destruction unless
+// quitConfirmed is true, so this only fires during an intentional quit.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    const { minimizeToTray } = getSettings();
-    if (!minimizeToTray) {
-      app.quit();
-    }
-    // else: tray icon keeps the process alive
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {

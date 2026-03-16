@@ -60,6 +60,8 @@ export interface AppSettings {
   backupLimit: number;
   /** The ID of the last server the user had selected — restored on next launch. */
   lastServerId?: string;
+  /** Whether the Player Controls panel was collapsed — restored on next launch. */
+  playerPanelCollapsed?: boolean;
 }
 
 /**

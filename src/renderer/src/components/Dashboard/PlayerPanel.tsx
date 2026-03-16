@@ -79,12 +79,20 @@ const Row: React.FC<RowProps> = ({ children }) => (
 // ---------------------------------------------------------------------------
 
 export const PlayerPanel: React.FC = () => {
-  const activeServerId = useAppStore((s) => s.activeServerId);
-  const serverStatuses = useAppStore((s) => s.serverStatuses);
-  const onlinePlayers  = useAppStore((s) => s.onlinePlayers);
+  const activeServerId    = useAppStore((s) => s.activeServerId);
+  const serverStatuses    = useAppStore((s) => s.serverStatuses);
+  const onlinePlayers     = useAppStore((s) => s.onlinePlayers);
+  const playerPanelCollapsed = useAppStore((s) => s.settings.playerPanelCollapsed ?? false);
+  const patchSettings     = useAppStore((s) => s.patchSettings);
 
   const { alert, show } = useAlert();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(playerPanelCollapsed);
+
+  const toggleCollapsed = (val: boolean) => {
+    setCollapsed(val);
+    patchSettings({ playerPanelCollapsed: val });
+    window.api.setSettings({ playerPanelCollapsed: val });
+  };
 
   // Input states
   const [kickName, setKickName]         = useState('');
@@ -207,7 +215,7 @@ export const PlayerPanel: React.FC = () => {
       >
         <button
           className="btn btn-ghost"
-          onClick={() => setCollapsed(false)}
+          onClick={() => toggleCollapsed(false)}
           title="Expand Player Controls"
           style={{ padding: 4, width: 22, height: 22 }}
         >
@@ -249,7 +257,7 @@ export const PlayerPanel: React.FC = () => {
         </div>
         <button
           className="btn btn-ghost"
-          onClick={() => setCollapsed(true)}
+          onClick={() => toggleCollapsed(true)}
           title="Collapse Player Controls"
           style={{ padding: 4, width: 22, height: 22, flexShrink: 0 }}
         >
