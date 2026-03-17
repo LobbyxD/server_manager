@@ -4,7 +4,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: [] })],
+    build: {
+      rollupOptions: {
+        external: ['original-fs'],
+      },
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

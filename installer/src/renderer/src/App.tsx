@@ -8,52 +8,6 @@ type DetectResult = {
   installedVersion?: string;
 };
 
-const S = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100vh',
-    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 14,
-    padding: '20px 24px 16px',
-    borderBottom: '1px solid rgba(255,255,255,0.08)',
-  },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    objectFit: 'contain' as const,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: '#fff',
-    letterSpacing: 0.2,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.45)',
-    marginTop: 1,
-  },
-  body: {
-    flex: 1,
-    overflow: 'auto',
-    padding: '20px 24px',
-  },
-  loading: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-  },
-};
-
 export const App: React.FC = () => {
   const [detect, setDetect]   = useState<DetectResult | null>(null);
   const [version, setVersion] = useState('1.0.0');
@@ -69,20 +23,35 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div style={S.root}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-primary)' }}>
+
       {/* Header */}
-      <div style={S.header}>
-        <img src="./icon.png" alt="" style={S.logo} draggable={false} />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '14px 20px',
+        background: 'var(--bg-surface)',
+        borderBottom: '1px solid var(--border)',
+        flexShrink: 0,
+      }}>
+        <img src="./icon.png" alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'contain' }} draggable={false} />
         <div>
-          <div style={S.title}>Minecraft Server Manager</div>
-          <div style={S.subtitle}>Setup v{version}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: 0.2 }}>
+            Minecraft Server Manager
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+            Setup v{version}
+          </div>
         </div>
       </div>
 
       {/* Body */}
-      <div style={S.body}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
         {detect === null ? (
-          <div style={S.loading}>Detecting installation…</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
+            Detecting installation…
+          </div>
         ) : detect.installed ? (
           <ManageView
             installPath={detect.installPath!}

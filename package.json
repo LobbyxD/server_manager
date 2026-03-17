@@ -1,7 +1,7 @@
 {
   "name": "minecraft-server-manager",
   "productName": "Minecraft Server Manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A modern desktop application for managing Minecraft server instances",
   "author": "R2D2",
   "main": "out/main/index.js",
@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder && npm --prefix installer run package",
-    "release": "electron-vite build && electron-builder --publish always"
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "electron-store": "^8.2.0",

@@ -11,8 +11,8 @@ interface Props {
 type Mode = 'idle' | 'confirm-uninstall' | 'working';
 
 export const ManageView: React.FC<Props> = ({ installPath, installedVersion, bundledVersion }) => {
-  const [mode,     setMode]     = useState<Mode>('idle');
-  const [progress, setProgress] = useState<ProgressPayload | null>(null);
+  const [mode,       setMode]       = useState<Mode>('idle');
+  const [progress,   setProgress]   = useState<ProgressPayload | null>(null);
   const [removeData, setRemoveData] = useState(false);
 
   useEffect(() => {
@@ -32,46 +32,51 @@ export const ManageView: React.FC<Props> = ({ installPath, installedVersion, bun
     window.installer.uninstall({ removeData });
   };
 
-  const done  = progress?.phase === 'done';
-
   return (
-    <div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
-        Minecraft Server Manager is already installed
-      </div>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 20 }}>
-        Installed version: <strong style={{ color: '#ddd' }}>{installedVersion ?? 'unknown'}</strong>
-        {bundledVersion !== installedVersion && (
-          <> &nbsp;·&nbsp; Bundled version: <strong style={{ color: '#4ade80' }}>{bundledVersion}</strong></>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Title */}
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+          Minecraft Server Manager is already installed
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          Installed version:{' '}
+          <strong style={{ color: 'var(--text-primary)' }}>{installedVersion ?? 'unknown'}</strong>
+          {bundledVersion !== installedVersion && (
+            <> &nbsp;·&nbsp; Bundled version:{' '}
+              <strong style={{ color: 'var(--accent)' }}>{bundledVersion}</strong>
+            </>
+          )}
+        </div>
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-        Installation folder
-      </div>
-      <div style={{ fontSize: 13, color: '#aaa', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span>{installPath}</span>
-        <button onClick={() => window.installer.openFolder(installPath)} style={btnStyle('secondary', true)}>
+      {/* Install path */}
+      <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <span className="section-label">Installation Folder</span>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{installPath}</div>
+        </div>
+        <button className="btn btn-surface" onClick={() => window.installer.openFolder(installPath)}>
           Open
         </button>
       </div>
 
       {/* Action cards */}
       {mode === 'idle' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <ActionCard
             title="Repair Installation"
             description="Overwrite application files with the bundled version. Your servers and settings are kept."
             buttonLabel="Repair"
-            buttonVariant="secondary"
+            buttonClass="btn-surface"
             onClick={handleRepair}
           />
-
           <ActionCard
             title="Uninstall"
             description="Remove the application from your system."
             buttonLabel="Uninstall"
-            buttonVariant="danger"
+            buttonClass="btn-danger"
             onClick={() => setMode('confirm-uninstall')}
           />
         </div>
@@ -79,26 +84,22 @@ export const ManageView: React.FC<Props> = ({ installPath, installedVersion, bun
 
       {/* Uninstall confirmation */}
       {mode === 'confirm-uninstall' && (
-        <div style={cardStyle}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
-            Remove all data?
+        <div className="panel" style={{ borderColor: 'rgba(248,113,113,0.2)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>
+            Confirm uninstall
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#ddd', cursor: 'pointer', marginBottom: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: 16 }}>
             <input
               type="checkbox"
               checked={removeData}
               onChange={(e) => setRemoveData(e.target.checked)}
-              style={{ width: 15, height: 15, accentColor: '#e05252' }}
+              style={{ width: 15, height: 15, accentColor: 'var(--danger)' }}
             />
-            Delete all servers, settings, and backups stored by this app
+            Delete all servers, settings, and backups
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setMode('idle')} style={btnStyle('secondary')}>
-              Cancel
-            </button>
-            <button onClick={handleUninstall} style={btnStyle('danger')}>
-              Yes, Uninstall
-            </button>
+            <button className="btn btn-surface" onClick={() => setMode('idle')}>Cancel</button>
+            <button className="btn btn-danger" onClick={handleUninstall}>Yes, Uninstall</button>
           </div>
         </div>
       )}
@@ -114,49 +115,18 @@ export const ManageView: React.FC<Props> = ({ installPath, installedVersion, bun
   );
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const cardStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 10,
-  padding: '16px',
-};
-
 const ActionCard: React.FC<{
   title: string;
   description: string;
   buttonLabel: string;
-  buttonVariant: 'secondary' | 'danger';
+  buttonClass: string;
   onClick: () => void;
-}> = ({ title, description, buttonLabel, buttonVariant, onClick }) => (
-  <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+}> = ({ title, description, buttonLabel, buttonClass, onClick }) => (
+  <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
     <div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 3 }}>{title}</div>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{description}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{description}</div>
     </div>
-    <button onClick={onClick} style={btnStyle(buttonVariant)}>
-      {buttonLabel}
-    </button>
+    <button className={`btn ${buttonClass}`} onClick={onClick}>{buttonLabel}</button>
   </div>
 );
-
-function btnStyle(variant: 'primary' | 'secondary' | 'danger', small = false): React.CSSProperties {
-  const bg =
-    variant === 'primary'   ? '#4f8ef7' :
-    variant === 'danger'    ? '#c0392b' :
-    'rgba(255,255,255,0.08)';
-  return {
-    padding: small ? '5px 12px' : '7px 16px',
-    borderRadius: 6,
-    border: 'none',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
-    background: bg,
-    color: '#fff',
-    whiteSpace: 'nowrap',
-  };
-}

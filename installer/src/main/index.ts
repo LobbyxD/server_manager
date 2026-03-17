@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { join } from 'path';
 import { registerHandlers } from './ipcHandlers';
 
+// ---------------------------------------------------------------------------
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);

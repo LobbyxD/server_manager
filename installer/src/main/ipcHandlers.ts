@@ -5,7 +5,7 @@
  */
 
 import { ipcMain, dialog, BrowserWindow, app } from 'electron';
-import fs from 'fs';
+import * as fs from 'original-fs'; // bypass Electron's asar-patched fs for file copy ops
 import path from 'path';
 import { execSync } from 'child_process';
 
@@ -17,7 +17,9 @@ const APP_ID        = 'com.danieldev.minecraft-server-manager';
 const APP_NAME      = 'Minecraft Server Manager';
 const PUBLISHER     = 'R2D2';
 const EXE_NAME      = `${APP_NAME}.exe`;
-const REG_BASE      = `HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall`;
+const REG_BASE_LM   = `HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall`;
+const REG_BASE_CU   = `HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall`;
+const REG_BASE      = REG_BASE_LM; // default for writes
 const APPDATA_DIR   = 'minecraft-server-manager'; // electron-store folder name
 
 // ---------------------------------------------------------------------------
@@ -48,33 +50,40 @@ interface DetectResult {
 }
 
 function detectInstallation(): DetectResult {
-  // 1. Our own registry key (written by this installer)
-  const ownPath = ps(
-    `(Get-ItemProperty -Path '${REG_BASE}\\${APP_ID}' -ErrorAction SilentlyContinue).InstallLocation`,
-  );
-  if (ownPath && fs.existsSync(path.join(ownPath, EXE_NAME))) {
-    const ver = ps(
-      `(Get-ItemProperty -Path '${REG_BASE}\\${APP_ID}' -ErrorAction SilentlyContinue).DisplayVersion`,
-    ) ?? undefined;
-    return { installed: true, installPath: ownPath, installedVersion: ver };
+  // 1. Our own registry key — check both HKLM and HKCU
+  for (const base of [REG_BASE_LM, REG_BASE_CU]) {
+    const ownPath = ps(
+      `(Get-ItemProperty -Path '${base}\\${APP_ID}' -ErrorAction SilentlyContinue).InstallLocation`,
+    );
+    if (ownPath && fs.existsSync(path.join(ownPath, EXE_NAME))) {
+      const ver = ps(
+        `(Get-ItemProperty -Path '${base}\\${APP_ID}' -ErrorAction SilentlyContinue).DisplayVersion`,
+      ) ?? undefined;
+      return { installed: true, installPath: ownPath, installedVersion: ver };
+    }
   }
 
-  // 2. Scan ALL uninstall keys for our display name (catches NSIS-installed versions)
-  const anyPath = ps(
-    `(Get-ItemProperty '${REG_BASE}\\*' -ErrorAction SilentlyContinue | ` +
-    `Where-Object { $_.DisplayName -eq '${APP_NAME}' } | ` +
-    `Select-Object -First 1 -ExpandProperty InstallLocation)`,
-  );
-  if (anyPath && fs.existsSync(path.join(anyPath, EXE_NAME))) {
-    return { installed: true, installPath: anyPath, installedVersion: undefined };
+  // 2. Scan ALL uninstall keys for our display name — both HKLM and HKCU
+  for (const base of [REG_BASE_LM, REG_BASE_CU]) {
+    const anyPath = ps(
+      `(Get-ItemProperty '${base}\\*' -ErrorAction SilentlyContinue | ` +
+      `Where-Object { $_.DisplayName -eq '${APP_NAME}' } | ` +
+      `Select-Object -First 1 -ExpandProperty InstallLocation)`,
+    );
+    if (anyPath && fs.existsSync(path.join(anyPath, EXE_NAME))) {
+      return { installed: true, installPath: anyPath, installedVersion: undefined };
+    }
   }
 
   // 3. Well-known filesystem paths
   const drive = process.env.SystemDrive ?? 'C:';
+  const localAppData = process.env.LOCALAPPDATA ?? '';
   const candidates = [
-    path.join(drive,                                         APP_NAME),
-    path.join(process.env.ProgramFiles ?? '',               APP_NAME),
-    path.join(process.env['ProgramFiles(x86)'] ?? '',       APP_NAME),
+    path.join(drive,                                   APP_NAME),
+    path.join(process.env.ProgramFiles ?? '',          APP_NAME),
+    path.join(process.env['ProgramFiles(x86)'] ?? '',  APP_NAME),
+    path.join(localAppData,                            APP_NAME),
+    path.join(localAppData, 'Programs',                APP_NAME),
   ];
   for (const p of candidates) {
     if (p && fs.existsSync(path.join(p, EXE_NAME))) {
@@ -107,7 +116,9 @@ function writeRegistry(installPath: string, version: string): void {
 }
 
 function deleteRegistry(): void {
-  ps(`Remove-Item -Path '${REG_BASE}\\${APP_ID}' -Recurse -Force -ErrorAction SilentlyContinue`);
+  for (const base of [REG_BASE_LM, REG_BASE_CU]) {
+    ps(`Remove-Item -Path '${base}\\${APP_ID}' -Recurse -Force -ErrorAction SilentlyContinue`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -315,16 +326,21 @@ export function registerHandlers(getWin: () => BrowserWindow | null): void {
 
       push({ phase: 'cleanup', percent: 70, message: 'Removing application files…' });
 
-      // Schedule deletion of install folder via a detached bat after this process exits.
-      const bat = path.join(installPath, '__uninstall__.bat');
-      fs.writeFileSync(bat, [
-        '@echo off',
-        'timeout /t 2 /nobreak >nul',
-        `rd /s /q "${installPath}"`,
-      ].join('\r\n'));
-
-      const { spawn } = require('child_process');
-      spawn('cmd.exe', ['/c', bat], { detached: true, windowsHide: true, stdio: 'ignore' }).unref();
+      // Delete install folder directly (we're a separate process so no files are locked by us).
+      // Fall back to a detached bat only if direct deletion fails (e.g. user has app open).
+      try {
+        fs.rmSync(installPath, { recursive: true, force: true });
+      } catch {
+        const bat = path.join(require('os').tmpdir(), '__msm_uninstall__.bat');
+        fs.writeFileSync(bat, [
+          '@echo off',
+          'timeout /t 3 /nobreak >nul',
+          `rd /s /q "${installPath}"`,
+          `del "%~f0"`,
+        ].join('\r\n'));
+        const { spawn } = require('child_process');
+        spawn('cmd.exe', ['/c', bat], { detached: true, windowsHide: true, stdio: 'ignore' }).unref();
+      }
 
       push({ phase: 'done', percent: 100, message: 'Uninstalled successfully.' });
     } catch (err) {

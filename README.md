@@ -15,8 +15,7 @@ A modern desktop application for managing multiple Minecraft server instances, b
 - **In-app .bat Editor** – Edit server start scripts without leaving the app
 - **Auto-start** – Configure servers to start automatically when the app launches
 - **System Tray** – Minimize to tray on close; keep servers running in the background
-- **Themes** – Dark and light mode with instant switching
-- **Steam Integration** – Ownership verification and achievement tracking via Steamworks SDK
+- **Auto-updater** – Checks for updates on launch and via Settings; downloads and installs silently
 
 ---
 
@@ -36,7 +35,7 @@ A modern desktop application for managing multiple Minecraft server instances, b
 | Styling | Tailwind CSS 3 + CSS custom properties |
 | State | Zustand 5 |
 | Persistence | electron-store 8 |
-| Steam SDK | steamworks.js |
+| Auto-update | electron-updater 6 |
 
 ---
 
@@ -48,12 +47,13 @@ A modern desktop application for managing multiple Minecraft server instances, b
 - npm 9 or later
 - A Minecraft server with a `.bat` or `.cmd` start script
 
-### Install
+### Install dependencies
 
 ```bash
-git clone https://github.com/your-username/minecraft-server-manager.git
-cd minecraft-server-manager
+git clone https://github.com/LobbyxD/server_manager.git
+cd server_manager
 npm install
+npm install --prefix installer
 ```
 
 ### Run in development
@@ -62,17 +62,38 @@ npm install
 npm run dev
 ```
 
-### Build
+### Build (compile only)
 
 ```bash
 npm run build
 ```
 
-### Package (creates installer in `dist/`)
+### Package (build + create installer EXE)
 
 ```bash
 npm run package
 ```
+
+Produces `installer/installer-dist/MinecraftServerManager-Setup.exe` — a portable, self-elevating installer.
+
+### Publish a release to GitHub
+
+```bash
+npm run release
+```
+
+Builds everything, then creates a GitHub release tagged `v<version>` and uploads the installer EXE.
+
+> Requires [GitHub CLI](https://cli.github.com/) installed and authenticated (`gh auth login`).
+
+---
+
+## Installation (end users)
+
+1. Download `MinecraftServerManager-Setup.exe` from the [Releases](https://github.com/LobbyxD/server_manager/releases) page.
+2. Double-click — Windows will prompt for administrator rights (required to install).
+3. Choose an install folder and optional shortcuts, then click **Install**.
+4. The installer doubles as an uninstaller: re-run it after installation to **Repair** or **Uninstall**.
 
 ---
 
@@ -90,28 +111,11 @@ npm run package
 
 | Setting | Default | Description |
 |---|---|---|
-| Theme | Dark | Dark or light UI |
 | Minimize to tray | On | Close button minimizes instead of quitting |
 | Log font size | 13 px | Console font size (10–20 px) |
 | Max concurrent servers | 1 | How many servers can run at once (1–10) |
 | Debug mode | Off | Show raw error details instead of friendly messages |
-
----
-
-## Achievements
-
-The app ships with 8 Steam achievements:
-
-| Achievement | How to unlock |
-|---|---|
-| First Launch | Open the app for the first time |
-| First Server | Start your first server |
-| Safe Exit | Gracefully shut down with servers running |
-| Force Killer | Force-kill a server |
-| Ban Hammer | Ban a player |
-| OP Granted | Grant operator status to a player |
-| Whitelist | Enable the whitelist |
-| Multitasker | Run 2 or more servers at the same time |
+| Check For Updates | — | Manually check for a new version |
 
 ---
 
@@ -124,7 +128,7 @@ minecraft-server-manager/
 │   │   ├── index.ts        # App entry, single-instance lock
 │   │   ├── ipcHandlers.ts  # All IPC handlers
 │   │   ├── serverProcess.ts# ServerProcess class (spawn/stop/kill)
-│   │   ├── steam.ts        # Steamworks integration
+│   │   ├── updater.ts      # Auto-updater (electron-updater)
 │   │   ├── store.ts        # Persistent store helpers
 │   │   ├── tray.ts         # System tray
 │   │   └── window.ts       # BrowserWindow setup
@@ -137,6 +141,15 @@ minecraft-server-manager/
 │   │   └── styles/         # Tailwind + CSS variables
 │   └── shared/
 │       └── types.ts        # Shared TypeScript types + IPC channel constants
+├── installer/              # Standalone installer Electron app
+│   ├── src/
+│   │   ├── main/           # Installer main process + IPC handlers
+│   │   ├── preload/        # contextBridge for installer renderer
+│   │   └── renderer/src/   # React UI (InstallView / ManageView)
+│   └── build/
+│       └── after-build.js  # electron-builder afterPack hook
+├── scripts/
+│   └── release.js          # Build + publish GitHub release in one step
 └── resources/
     └── icon.ico            # Windows app icon
 ```
