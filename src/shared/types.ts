@@ -152,6 +152,8 @@ export const IPC = {
   /** Renderer→main: cancel the quit – do nothing. */
   QUIT_CANCEL: 'quit:cancel',
 
+  APP_VERSION: 'app:version',
+
   // Updater — renderer → main (ipcMain.handle)
   UPDATER_CHECK:    'updater:checkForUpdates',
   UPDATER_DOWNLOAD: 'updater:downloadUpdate',

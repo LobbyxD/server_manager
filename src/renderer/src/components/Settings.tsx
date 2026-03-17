@@ -6,7 +6,7 @@
  *  - Log viewer font size.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { AppSettings } from '../../../../shared/types';
 
@@ -112,6 +112,11 @@ export const Settings: React.FC = () => {
   const setSettings     = useAppStore((s) => s.setSettings);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
   const updaterStatus   = useAppStore((s) => s.updaterStatus);
+
+  const [appVersion, setAppVersion] = useState('');
+  useEffect(() => {
+    window.api.getAppVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   // Local draft – only committed on Save.
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
@@ -393,9 +398,9 @@ export const Settings: React.FC = () => {
           >
             {/* Status text */}
             <div style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-              {updaterStatus.state === 'idle' && 'Minecraft Server Manager v1.0.0'}
+              {updaterStatus.state === 'idle' && `Minecraft Server Manager${appVersion ? ` v${appVersion}` : ''}`}
               {updaterStatus.state === 'checking' && 'Checking for updates…'}
-              {updaterStatus.state === 'not-available' && 'You\'re on the latest version (v1.0.0)'}
+              {updaterStatus.state === 'not-available' && `You're on the latest version${appVersion ? ` (v${appVersion})` : ''}`}
               {updaterStatus.state === 'available' && `Update v${updaterStatus.version} is available`}
               {updaterStatus.state === 'downloading' && (
                 <div>

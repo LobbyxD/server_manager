@@ -133,6 +133,9 @@ const api = {
     return () => ipcRenderer.removeListener(IPC.QUIT_REQUEST, handler);
   },
 
+  // --- App info -----------------------------------------------------------
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_VERSION),
+
   // --- Updater ------------------------------------------------------------
   checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATER_CHECK),
   downloadUpdate:  (): Promise<void> => ipcRenderer.invoke(IPC.UPDATER_DOWNLOAD),

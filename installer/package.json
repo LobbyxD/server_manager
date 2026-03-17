@@ -1,8 +1,8 @@
 {
   "name": "minecraft-server-manager-installer",
   "productName": "Minecraft Server Manager Setup",
-  "version": "1.0.0",
-  "description": "Installer for Minecraft Server Manager",
+  "version": "1.0.1",
+  "description": "Minecraft Server Manager Setup",
   "author": "R2D2",
   "repository": {
     "type": "git",
@@ -41,7 +41,8 @@
       "executableName": "MinecraftServerManager-Setup"
     },
     "portable": {
-      "requestExecutionLevel": "admin"
+      "requestExecutionLevel": "admin",
+      "artifactName": "Minecraft Server Manager Setup.exe"
     },
     "extraResources": [
       {

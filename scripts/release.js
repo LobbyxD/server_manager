@@ -9,7 +9,7 @@
 const { execSync } = require('child_process');
 const { version }  = require('../package.json');
 const tag          = `v${version}`;
-const installerExe = `installer\\installer-dist\\Minecraft Server Manager Setup ${version}.exe`;
+const installerExe = `installer\\installer-dist\\Minecraft Server Manager Setup.exe`;
 const gh           = `"C:\\Program Files\\GitHub CLI\\gh.exe"`;
 
 function run(cmd) {

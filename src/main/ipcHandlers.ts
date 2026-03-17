@@ -6,7 +6,7 @@
  * log events and status changes can be broadcast to the renderer.
  */
 
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -136,6 +136,9 @@ function requireProfile(id: string): ServerProfile {
 // ---------------------------------------------------------------------------
 
 export function registerIpcHandlers(): void {
+  // --- App info ---------------------------------------------------------
+  ipcMain.handle(IPC.APP_VERSION, () => app.getVersion());
+
   // --- Server lifecycle -------------------------------------------------
 
   ipcMain.handle(IPC.SERVER_START, async (_event, id: string) => {

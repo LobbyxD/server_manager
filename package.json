@@ -2,7 +2,7 @@
   "name": "minecraft-server-manager",
   "productName": "Minecraft Server Manager",
   "version": "1.0.1",
-  "description": "A modern desktop application for managing Minecraft server instances",
+  "description": "Minecraft Server Manager",
   "author": "R2D2",
   "main": "out/main/index.js",
   "scripts": {

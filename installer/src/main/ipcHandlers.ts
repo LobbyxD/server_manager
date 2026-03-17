@@ -206,6 +206,32 @@ function broadcast(getWin: () => BrowserWindow | null, p: ProgressPayload): void
 }
 
 // ---------------------------------------------------------------------------
+// Silent update (called directly from main process when --update flag is set)
+// ---------------------------------------------------------------------------
+
+/**
+ * Performs a silent in-place update:
+ *  1. Detects the current installation path.
+ *  2. Overwrites all files with the bundled version.
+ *  3. Updates the registry version entry.
+ * Returns the install path so the caller can launch the updated app.
+ * Throws if no installation is found.
+ */
+export function silentUpdate(): string {
+  const detected = detectInstallation();
+  const installPath = detected.installPath ?? (() => {
+    const drive = process.env.SystemDrive ?? 'C:';
+    return path.join(drive, APP_NAME);
+  })();
+
+  fs.mkdirSync(installPath, { recursive: true });
+  copyTree(getBundledAppDir(), installPath, () => { /* no UI progress in silent mode */ });
+  writeRegistry(installPath, getBundledVersion());
+
+  return installPath;
+}
+
+// ---------------------------------------------------------------------------
 // Handler registration
 // ---------------------------------------------------------------------------
 

@@ -13,6 +13,7 @@ import { Dashboard } from './components/Dashboard';
 import { Settings } from './components/Settings';
 import { ServerForm } from './components/ServerForm';
 import { QuitDialog } from './components/QuitDialog';
+import { UpdateDialog } from './components/UpdateDialog';
 import { useAppStore } from './store/useAppStore';
 import { useServerEvents } from './hooks/useServerEvents';
 
@@ -26,10 +27,13 @@ export const App: React.FC = () => {
   const isSettingsOpen    = useAppStore((s) => s.isSettingsOpen);
   const isServerFormOpen  = useAppStore((s) => s.isServerFormOpen);
   const setServerStatus    = useAppStore((s) => s.setServerStatus);
+  const updaterStatus      = useAppStore((s) => s.updaterStatus);
   const setUpdaterStatus   = useAppStore((s) => s.setUpdaterStatus);
 
   /** Non-null when the quit dialog is open; holds the list of running server names. */
   const [quitServers, setQuitServers] = useState<string[] | null>(null);
+  /** True after the user clicks "Later" on the update popup — hide for this session. */
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   // Wire up IPC push events into the store.
   useServerEvents();
@@ -100,6 +104,12 @@ export const App: React.FC = () => {
 
       {isSettingsOpen  && <Settings />}
       {isServerFormOpen && <ServerForm />}
+      {!updateDismissed &&
+        (updaterStatus.state === 'available' ||
+         updaterStatus.state === 'downloading' ||
+         updaterStatus.state === 'ready') && (
+        <UpdateDialog onDismiss={() => setUpdateDismissed(true)} />
+      )}
       {quitServers && (
         <QuitDialog
           runningServers={quitServers}
